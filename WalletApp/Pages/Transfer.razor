@@ -1,0 +1,85 @@
+﻿@page "/transfer"
+@using WalletApp.Models
+@using WalletApp.Services
+@inject GoogleSheetsService Sheets
+@inject NavigationManager Nav
+
+<div style="max-width:500px;margin:0 auto">
+    <div class="card">
+        <div style="text-align:center;margin-bottom:20px">
+            <div style="font-size:36px">🔄</div>
+            <div style="font-size:16px;font-weight:600;margin-top:6px">Transfer Money</div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Amount (৳)</label>
+            <input class="form-control" type="number" step="0.01" placeholder="0.00" @bind="amount"
+                   style="font-size:22px;font-weight:700;color:var(--primary)" />
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">From Account</label>
+                <select class="form-control" @bind="fromId">
+                    <option value="">Select source</option>
+                    @foreach (var a in accounts)
+                    {
+                        <option value="@a.AccountId">@a.Name (৳@a.Balance.ToString("N0"))</option>
+                    }
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">To Account</label>
+                <select class="form-control" @bind="toId">
+                    <option value="">Select destination</option>
+                    @foreach (var a in accounts.Where(a => a.AccountId != fromId))
+                    {
+                        <option value="@a.AccountId">@a.Name (৳@a.Balance.ToString("N0"))</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Note (optional)</label>
+            <input class="form-control" type="text" placeholder="Reason for transfer..." @bind="note" />
+        </div>
+
+        @if (!string.IsNullOrEmpty(error))
+        {
+            <div style="background:var(--danger-light);color:var(--danger);padding:10px 14px;border-radius:var(--radius-sm);margin-bottom:14px;font-size:13px">@error</div>
+        }
+
+        <button class="btn btn-primary" style="width:100%;justify-content:center;padding:13px" @onclick="Save" disabled="@saving">
+            @(saving ? "Transferring..." : "Transfer")
+        </button>
+    </div>
+</div>
+
+@code {
+    decimal amount = 0;
+    string fromId = "", toId = "", note = "";
+    List<Account> accounts = new();
+    bool saving = false;
+    string error = "";
+
+    protected override async Task OnInitializedAsync()
+        => accounts = await Sheets.GetAccountsAsync();
+
+    async Task Save()
+    {
+        if (amount <= 0) { error = "Enter a valid amount."; return; }
+        if (string.IsNullOrEmpty(fromId)) { error = "Select source account."; return; }
+        if (string.IsNullOrEmpty(toId)) { error = "Select destination account."; return; }
+        if (fromId == toId) { error = "Source and destination must be different."; return; }
+
+        var from = accounts.First(a => a.AccountId == fromId);
+        if (from.Balance < amount) { error = $"Insufficient balance. Available: ৳{from.Balance:N0}"; return; }
+
+        saving = true; error = "";
+        await Sheets.AddTransferAsync(new WalletApp.Models.Transfer
+        { FromAccountId = fromId, ToAccountId = toId, Amount = amount, Note = note, Date = DateTime.Today });
+        saving = false;
+        Nav.NavigateTo("/");
+    }
+}

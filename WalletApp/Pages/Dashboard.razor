@@ -1,0 +1,177 @@
+﻿@page "/"
+@using WalletApp.Models
+@using WalletApp.Services
+@inject GoogleSheetsService Sheets
+@inject ExportService Exporter
+@inject AuthService Auth
+@inject NavigationManager Nav
+@if (!Auth.IsLoggedIn) { Nav.NavigateTo("/login"); return; }
+
+@if (loading)
+{
+    <div style="text-align:center;padding:60px">
+        <div style="font-size:40px;margin-bottom:12px">⏳</div>
+        <p style="color:var(--gray-500)">Loading your wallet...</p>
+    </div>
+}
+else if (stats != null)
+{
+    <!-- Date & account filter bar -->
+    <div class="filter-bar">
+        <label>From</label>
+        <input type="date" @bind="filterFrom" />
+        <label>To</label>
+        <input type="date" @bind="filterTo" />
+        <select @bind="filterAccountId" class="form-control" style="width:auto">
+            <option value="">All accounts</option>
+            @foreach (var a in accounts)
+            {
+                <option value="@a.AccountId">@a.Name</option>
+            }
+        </select>
+        <button class="btn btn-primary btn-sm" @onclick="LoadData">Apply</button>
+        <button class="btn btn-outline btn-sm" @onclick="ExportExcel">📥 Excel</button>
+        <button class="btn btn-outline btn-sm" @onclick="ExportPdf">📄 PDF</button>
+    </div>
+
+    <!-- Stat cards -->
+    <div class="stat-grid">
+        <div class="stat-card balance">
+            <div class="stat-label">Total Balance</div>
+            <div class="stat-amount">৳@stats.TotalBalance.ToString("N0")</div>
+            <div class="stat-icon">💰</div>
+        </div>
+        <div class="stat-card income">
+            <div class="stat-label">Income</div>
+            <div class="stat-amount">৳@stats.TotalIncome.ToString("N0")</div>
+            <div class="stat-icon">📈</div>
+        </div>
+        <div class="stat-card expense">
+            <div class="stat-label">Expenses</div>
+            <div class="stat-amount">৳@stats.TotalExpense.ToString("N0")</div>
+            <div class="stat-icon">📉</div>
+        </div>
+        <div class="stat-card savings">
+            <div class="stat-label">Net Savings</div>
+            <div class="stat-amount">৳@stats.TotalSavings.ToString("N0")</div>
+            <div class="stat-icon">🏦</div>
+        </div>
+    </div>
+
+    <!-- Accounts -->
+    <div style="margin-bottom:24px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <h2 style="font-size:16px;font-weight:600">My Accounts</h2>
+            <a href="/accounts" class="btn btn-outline btn-sm">Manage</a>
+        </div>
+        <div class="account-grid">
+            @foreach (var a in stats.Accounts)
+            {
+                <div class="account-card" @onclick='() => Nav.NavigateTo($"/transactions?account={a.AccountId}")'>
+                    <div class="account-type">@a.Type</div>
+                    <div class="account-name">@a.Name</div>
+                    <div class="account-balance">৳@a.Balance.ToString("N0")</div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Top expenses + Recent transactions -->
+    <div style="display:grid;grid-template-columns:1fr 2fr;gap:20px">
+
+        <!-- Top expenses -->
+        <div class="card">
+            <div style="font-size:15px;font-weight:600;margin-bottom:14px">Top Expenses</div>
+            @if (!stats.TopExpenses.Any())
+            {
+                <p style="color:var(--gray-400);font-size:13px">No expenses yet</p>
+            }
+            else
+            {
+                @foreach (var (cat, amt) in stats.TopExpenses)
+                {
+                    var pct = stats.TotalExpense > 0 ? (int)(amt / stats.TotalExpense * 100) : 0;
+                    <div style="margin-bottom:12px">
+                        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+                            <span>@cat</span>
+                            <span style="font-weight:600;color:var(--danger)">৳@amt.ToString("N0")</span>
+                        </div>
+                        <div style="height:6px;background:var(--gray-100);border-radius:3px">
+                            <div style="height:100%;width:@pct%;background:var(--danger);border-radius:3px;transition:width .4s"></div>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+
+        <!-- Recent transactions -->
+        <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+                <div style="font-size:15px;font-weight:600">Recent Transactions</div>
+                <a href="/transactions" class="btn btn-outline btn-sm">View all</a>
+            </div>
+            <div class="txn-list">
+                @foreach (var t in recentTxns)
+                {
+                    var cat = categories.FirstOrDefault(c => c.CategoryId == t.CategoryId);
+                    var acc = accounts.FirstOrDefault(a => a.AccountId == t.AccountId);
+                    <div class="txn-item">
+                        <div class="txn-icon @t.Type.ToLower()">@(cat?.Icon ?? (t.Type == "Income" ? "💰" : "💸"))</div>
+                        <div class="txn-meta">
+                            <div class="txn-name">@(cat?.Name ?? "Other")</div>
+                            <div class="txn-sub">@acc?.Name • @t.Date.ToString("dd MMM")</div>
+                        </div>
+                        <div class="txn-amount @t.Type.ToLower()">
+                            @(t.Type == "Income" ? "+" : "-")৳@t.Amount.ToString("N0")
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    DashboardStats? stats;
+    List<Transaction> recentTxns = new();
+    List<Account> accounts = new();
+    List<Category> categories = new();
+    bool loading = true;
+    DateTime filterFrom = DateTime.Now.AddMonths(-1);
+    DateTime filterTo = DateTime.Now;
+    string filterAccountId = "";
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    async Task LoadData()
+    {
+        loading = true;
+        StateHasChanged();
+        accounts = await Sheets.GetAccountsAsync();
+        categories = await Sheets.GetCategoriesAsync();
+        var accIds = string.IsNullOrEmpty(filterAccountId) ? null : new List<string> { filterAccountId };
+        stats = await Sheets.GetDashboardStatsAsync(filterFrom, filterTo, accIds);
+        recentTxns = (await Sheets.GetTransactionsAsync(filterFrom, filterTo, string.IsNullOrEmpty(filterAccountId) ? null : filterAccountId)).Take(8).ToList();
+        loading = false;
+    }
+
+    async Task ExportExcel()
+    {
+        var txns = await Sheets.GetTransactionsAsync(filterFrom, filterTo);
+        var bytes = Exporter.ExportToExcel(txns, accounts, categories);
+        // Trigger download via JS
+        await JS.InvokeVoidAsync("downloadFile", "wallet-export.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            Convert.ToBase64String(bytes));
+    }
+
+    async Task ExportPdf()
+    {
+        var txns = await Sheets.GetTransactionsAsync(filterFrom, filterTo);
+        var bytes = Exporter.ExportToPdf(txns, accounts, categories);
+        await JS.InvokeVoidAsync("downloadFile", "wallet-report.pdf", "application/pdf",
+            Convert.ToBase64String(bytes));
+    }
+
+    [Inject] IJSRuntime JS { get; set; } = default!;
+}

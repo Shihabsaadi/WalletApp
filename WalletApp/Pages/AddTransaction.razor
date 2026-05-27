@@ -1,0 +1,103 @@
+﻿@page "/add"
+@using WalletApp.Models
+@using WalletApp.Services
+@inject GoogleSheetsService Sheets
+@inject NavigationManager Nav
+@inject AuthService Auth
+
+@if (!Auth.IsLoggedIn) { Nav.NavigateTo("/login"); return; }
+
+<div style="max-width:500px;margin:0 auto">
+    <div class="card">
+        <!-- Type toggle -->
+        <div class="type-toggle" style="margin-bottom:20px">
+            <button class="type-btn @(type == "Income" ? "active-income" : "")" @onclick='() => type = "Income"'>💰 Income</button>
+            <button class="type-btn @(type == "Expense" ? "active-expense" : "")" @onclick='() => type = "Expense"'>💸 Expense</button>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Amount (৳)</label>
+            <input class="form-control" type="number" step="0.01" placeholder="0.00" @bind="amount" style="font-size:22px;font-weight:700;color:var(--primary)" />
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Account</label>
+                <select class="form-control" @bind="accountId">
+                    <option value="">Select account</option>
+                    @foreach (var a in accounts)
+                    {
+                        <option value="@a.AccountId">@a.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Category</label>
+                <select class="form-control" @bind="categoryId">
+                    <option value="">Select category</option>
+                    @foreach (var c in categories.Where(c => c.Type == type))
+                    {
+                        <option value="@c.CategoryId">@c.Icon @c.Name</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Date</label>
+                <input class="form-control" type="date" @bind="date" />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Note (optional)</label>
+                <input class="form-control" type="text" placeholder="Add a note..." @bind="note" />
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(error))
+        {
+            <div style="background:var(--danger-light);color:var(--danger);padding:10px 14px;border-radius:var(--radius-sm);margin-bottom:14px;font-size:13px">@error</div>
+        }
+
+        <button class="btn btn-primary" style="width:100%;justify-content:center;padding:13px" @onclick="Save" disabled="@saving">
+            @(saving ? "Saving..." : $"Save {type}")
+        </button>
+    </div>
+</div>
+
+@code {
+    string type = "Expense";
+    decimal amount = 0;
+    string accountId = "", categoryId = "", note = "";
+    DateTime date = DateTime.Today;
+    List<Account> accounts = new();
+    List<Category> categories = new();
+    bool saving = false;
+    string error = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        accounts = await Sheets.GetAccountsAsync();
+        categories = await Sheets.GetCategoriesAsync();
+    }
+
+    async Task Save()
+    {
+        if (amount <= 0) { error = "Please enter a valid amount."; return; }
+        if (string.IsNullOrEmpty(accountId)) { error = "Please select an account."; return; }
+        if (string.IsNullOrEmpty(categoryId)) { error = "Please select a category."; return; }
+
+        saving = true; error = "";
+        await Sheets.AddTransactionAsync(new Transaction
+        {
+            Type = type,
+            Amount = amount,
+            AccountId = accountId,
+            CategoryId = categoryId,
+            Note = note,
+            Date = date
+        });
+        saving = false;
+        Nav.NavigateTo("/");
+    }
+}

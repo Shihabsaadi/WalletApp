@@ -1,0 +1,112 @@
+﻿@using WalletApp.Services
+@inherits LayoutComponentBase
+@inject AuthService Auth
+@inject NavigationManager Nav
+
+@if (!Auth.IsLoggedIn)
+{
+    @Body
+}
+else
+{
+    <div class="app-shell">
+        <!-- Sidebar overlay (mobile) -->
+        <div class="sidebar-overlay @(sidebarOpen ? "open" : "")" @onclick="CloseSidebar"></div>
+
+        <!-- Sidebar -->
+        <aside class="sidebar @(sidebarOpen ? "open" : "")">
+            <div class="sidebar-logo">
+                <div class="logo-icon">💰</div>
+                <span>My Wallet</span>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-section-label">Main</div>
+                <NavLink class="nav-item" href="/" Match="NavLinkMatch.All" @onclick="CloseSidebar">
+                    <span class="nav-icon">📊</span> Dashboard
+                </NavLink>
+                <NavLink class="nav-item" href="/accounts" @onclick="CloseSidebar">
+                    <span class="nav-icon">🏦</span> Accounts
+                </NavLink>
+                <NavLink class="nav-item" href="/transactions" @onclick="CloseSidebar">
+                    <span class="nav-icon">📋</span> Transactions
+                </NavLink>
+                <div class="nav-section-label" style="margin-top:8px">Actions</div>
+                <NavLink class="nav-item" href="/add" @onclick="CloseSidebar">
+                    <span class="nav-icon">➕</span> Add Transaction
+                </NavLink>
+                <NavLink class="nav-item" href="/transfer" @onclick="CloseSidebar">
+                    <span class="nav-icon">🔄</span> Transfer
+                </NavLink>
+                <div class="nav-section-label" style="margin-top:8px">Other</div>
+                <NavLink class="nav-item" href="/settings" @onclick="CloseSidebar">
+                    <span class="nav-icon">⚙️</span> Settings
+                </NavLink>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="user-chip">
+                    @if (!string.IsNullOrEmpty(Auth.UserPhoto))
+                    {
+                        <img class="user-avatar" src="@Auth.UserPhoto" alt="avatar" />
+                    }
+                    else
+                    {
+                        <div class="user-avatar">@(Auth.UserName?.FirstOrDefault())</div>
+                    }
+                    <div style="flex:1;min-width:0">
+                        <div class="user-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@Auth.UserName</div>
+                        <div class="user-email" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@Auth.UserEmail</div>
+                    </div>
+                    <button class="btn-icon" @onclick="Logout" title="Logout">🚪</button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main -->
+        <main class="main-content">
+            <header class="topbar">
+                <button class="hamburger" @onclick="ToggleSidebar">☰</button>
+                <span class="topbar-title">@pageTitle</span>
+                <div class="topbar-actions">
+                    <button class="btn btn-primary btn-sm" @onclick='() => Nav.NavigateTo("/add")'>+ Add</button>
+                </div>
+            </header>
+            <div class="page-body">
+                @Body
+            </div>
+        </main>
+    </div>
+}
+
+@code {
+    bool sidebarOpen = false;
+    string pageTitle = "Dashboard";
+
+    void ToggleSidebar() => sidebarOpen = !sidebarOpen;
+    void CloseSidebar() => sidebarOpen = false;
+
+    async Task Logout()
+    {
+        await Auth.LogoutAsync();
+        Nav.NavigateTo("/", true);
+    }
+
+    protected override void OnInitialized()
+    {
+        Nav.LocationChanged += OnLocationChanged;
+        SetTitle(Nav.Uri);
+    }
+
+    void OnLocationChanged(object? s, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+        => SetTitle(e.Location);
+
+    void SetTitle(string uri)
+    {
+        pageTitle = uri.Contains("/accounts") ? "Accounts"
+            : uri.Contains("/transactions") ? "Transactions"
+            : uri.Contains("/add") ? "Add Transaction"
+            : uri.Contains("/transfer") ? "Transfer Money"
+            : uri.Contains("/settings") ? "Settings"
+            : "Dashboard";
+        StateHasChanged();
+    }
+}

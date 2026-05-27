@@ -1,0 +1,55 @@
+﻿<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">WalletApp</a>
+        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+    </div>
+</div>
+
+<div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
+    <nav class="nav flex-column">
+        @foreach(var item in menuItems)
+        {
+            if (item.Name == "Home")
+            {
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                        <span class="@item.Icon" aria-hidden="true"></span> @item.Name
+                    </NavLink>
+                </div>
+            }
+            else
+            {
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="@item.Url">
+                        <span class="@item.Icon" aria-hidden="true"></span> @item.Name
+                    </NavLink>
+                </div>
+            }
+
+        }
+    </nav>
+</div>
+
+@code {
+    private bool collapseNavMenu = true;
+
+    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+    private List<MenuItem> menuItems = new List<MenuItem>
+    {
+        new MenuItem { Name = "Home", Icon = "bi bi-house-door-fill-nav-menu", Url = "" },
+        new MenuItem { Name = "Counter", Icon = "bi bi-plus-square-fill-nav-menu", Url = "counter" },
+        new MenuItem { Name = "Weather", Icon = "bi bi-list-nested-nav-menu", Url = "weather" }
+    };
+    private void ToggleNavMenu()
+    {
+        collapseNavMenu = !collapseNavMenu;
+    }
+    private class MenuItem
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Icon { get; set; } = string.Empty;
+        public string Url { get; set; } = string.Empty;
+    }
+}
