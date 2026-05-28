@@ -50,11 +50,7 @@ public class AuthService
 
     private string GetRedirectUri()
     {
-        return "https://localhost:5000/auth/callback";
-        //var isDevelopment = _config["Environment:IsDevelopment"];
-        //var redirectUrl = isDevelopment == "true" ? "https://localhost:5000" : "";
-        //// Update this to match your deployed URL
-        //return redirectUrl +"/auth/callback";
+        return _config["Auth:RedirectUri"];
     }
 
     public async Task HandleCallbackAsync(string accessToken, string? email, string? name, string? photo)

@@ -128,6 +128,51 @@ public class GoogleSheetsService
                    .Where(t => !string.IsNullOrEmpty(t.TransferId))
                    .OrderByDescending(t => t.Date).ToList();
     }
+    // Replace the existing GetTransfersAsync with this — adds date and account filtering
+    public async Task<List<Transfer>> GetTransfersAsync(
+        DateTime? from = null, DateTime? to = null, string? accountId = null)
+    {
+        var rows = await ReadRange("Transfers!A2:G");
+        var transfers = rows.Select(Transfer.FromRow)
+                            .Where(t => !string.IsNullOrEmpty(t.TransferId)).ToList();
+
+        if (from.HasValue)
+            transfers = transfers.Where(t => t.Date >= from.Value).ToList();
+        if (to.HasValue)
+            transfers = transfers.Where(t => t.Date <= to.Value).ToList();
+        if (!string.IsNullOrEmpty(accountId))
+            transfers = transfers.Where(t =>
+                t.FromAccountId == accountId || t.ToAccountId == accountId).ToList();
+
+        return transfers.OrderByDescending(t => t.Date).ToList();
+    }
+
+    // Add this new method
+    public async Task DeleteTransferAsync(Transfer transfer)
+    {
+        var rows = await ReadRange("Transfers!A2:G");
+        for (int i = 0; i < rows.Count; i++)
+        {
+            if (rows[i].Count > 0 && rows[i][0]?.ToString() == transfer.TransferId)
+            {
+                // Clear the row
+                var emptyRow = new List<object> { "", "", "", "", "", "", "" };
+                await UpdateRow($"Transfers!A{i + 2}:G{i + 2}", emptyRow);
+
+                // Reverse balances on both accounts
+                var accounts = await GetAccountsAsync();
+                var from = accounts.FirstOrDefault(a => a.AccountId == transfer.FromAccountId);
+                var to = accounts.FirstOrDefault(a => a.AccountId == transfer.ToAccountId);
+
+                if (from != null)
+                    await UpdateAccountBalanceAsync(from.AccountId, from.Balance + transfer.Amount);
+                if (to != null)
+                    await UpdateAccountBalanceAsync(to.AccountId, to.Balance - transfer.Amount);
+
+                return;
+            }
+        }
+    }
 
     public async Task AddTransferAsync(Transfer transfer)
     {

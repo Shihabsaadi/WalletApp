@@ -37,6 +37,9 @@ else
                 <NavLink class="nav-item" href="/transfer" @onclick="CloseSidebar">
                     <span class="nav-icon">🔄</span> Transfer
                 </NavLink>
+                <NavLink class="nav-item" href="/transfers" @onclick="CloseSidebar">
+                    <span class="nav-icon">📜</span> Transfer History
+                </NavLink>
                 <div class="nav-section-label" style="margin-top:8px">Other</div>
                 <NavLink class="nav-item" href="/settings" @onclick="CloseSidebar">
                     <span class="nav-icon">⚙️</span> Settings
@@ -67,7 +70,8 @@ else
                 <button class="hamburger" @onclick="ToggleSidebar">☰</button>
                 <span class="topbar-title">@pageTitle</span>
                 <div class="topbar-actions">
-                    <button class="btn btn-primary btn-sm" @onclick='() => Nav.NavigateTo("/add")'>+ Add</button>
+                    <button class="btn btn-primary btn-sm" @onclick='() => Nav.NavigateTo("/transfer")'>+ Add Transfer</button>
+                    <button class="btn btn-primary btn-sm" @onclick='() => Nav.NavigateTo("/add")'>+ Add Transaction</button>
                 </div>
             </header>
             <div class="page-body">
