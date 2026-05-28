@@ -2,29 +2,38 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [ deployment ]
+    branches:
+      - deployment
+
+permissions:
+  contents: write
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
-    - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v3
-      with:
-        dotnet-version: '10.0.x'
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
 
-    - name: Publish
-      run: dotnet publish WalletApp/WalletApp.csproj -c Release -o release --nologo
+      - name: Publish
+        run: dotnet publish WalletApp/WalletApp.csproj -c Release -o release --nologo
 
-    - name: Fix base path
-      run: |
-        sed -i 's|<base href="/" />|<base href="/WalletApp/" />|g' release/wwwroot/index.html
-        cp release/wwwroot/index.html release/wwwroot/404.html
+      - name: Fix base path
+        run: |
+          sed -i 's|<base href="/" />|<base href="/WalletApp/" />|g' release/wwwroot/index.html
+          cp release/wwwroot/index.html release/wwwroot/404.html
 
-    - name: Deploy
-      uses: peaceiris/actions-gh-pages@v3
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: release/wwwroot
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./release/wwwroot
+          force_orphan: true
