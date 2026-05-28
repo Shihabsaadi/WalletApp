@@ -1,0 +1,110 @@
+﻿@page "/auth/callback"
+@using WalletApp.Services
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#4F46E5,#7C3AED)">
+    <div style="background:#fff;border-radius:20px;padding:40px;text-align:center;width:340px">
+        @if (!string.IsNullOrEmpty(errorMsg))
+        {
+            <div style="font-size:36px;margin-bottom:12px">❌</div>
+            <div style="font-size:16px;font-weight:600;margin-bottom:8px;color:#DC2626">Login Failed</div>
+            <div style="font-size:13px;color:#6B7280;margin-bottom:20px">@errorMsg</div>
+            <button @onclick='() => Nav.NavigateTo("/login")'
+                    style="padding:10px 24px;background:#4F46E5;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">
+                Try Again
+            </button>
+        }
+        else
+        {
+            <div style="font-size:40px;margin-bottom:12px">⏳</div>
+            <div style="font-size:16px;font-weight:600;margin-bottom:6px">Signing you in...</div>
+            <div style="font-size:13px;color:#6B7280">Please wait</div>
+        }
+    </div>
+</div>
+
+@code {
+    string errorMsg = "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // OnAfterRender is used here because JS interop (reading window.location.hash)
+        // is only available after the page has fully rendered in the browser
+        if (!firstRender) return;
+
+        await HandleCallback();
+    }
+
+    async Task HandleCallback()
+    {
+        try
+        {
+            // Read the URL fragment — Blazor cannot access # fragments directly
+            // so we use JS. Google puts the token here:
+            // http://localhost:5000/auth/callback#access_token=xxx&token_type=Bearer
+            var fragment = await JS.InvokeAsync<string>("eval", "window.location.hash");
+
+            if (string.IsNullOrEmpty(fragment))
+            {
+                errorMsg = "No token received from Google. Please try again.";
+                StateHasChanged();
+                return;
+            }
+
+            var token = ExtractParam(fragment, "access_token");
+
+            if (string.IsNullOrEmpty(token))
+            {
+                errorMsg = "Could not read access token. Please try again.";
+                StateHasChanged();
+                return;
+            }
+
+            // Fetch user profile (name, email, photo) from Google
+            using var http = new HttpClient();
+            http.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var profile = await http.GetFromJsonAsync<GoogleProfile>(
+                "https://www.googleapis.com/oauth2/v3/userinfo");
+
+            // Save token + profile to localStorage and update auth state
+            await Auth.HandleCallbackAsync(
+                token,
+                profile?.Email,
+                profile?.Name,
+                profile?.Picture
+            );
+
+            // Go to dashboard
+            Nav.NavigateTo("/", forceLoad: false);
+        }
+        catch (Exception ex)
+        {
+            errorMsg = $"Login error: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    string ExtractParam(string fragment, string key)
+    {
+        var clean = fragment.TrimStart('#');
+        var parts = clean.Split('&');
+        foreach (var part in parts)
+        {
+            var kv = part.Split('=');
+            if (kv.Length == 2 && kv[0] == key)
+                return Uri.UnescapeDataString(kv[1]);
+        }
+        return "";
+    }
+
+    class GoogleProfile
+    {
+        public string? Email { get; set; }
+        public string? Name { get; set; }
+        public string? Picture { get; set; }
+    }
+}

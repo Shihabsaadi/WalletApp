@@ -1,0 +1,337 @@
+﻿@page "/transactions"
+@using WalletApp.Services
+@using WalletApp.Models
+@inject GoogleSheetsService Sheets
+@inject NavigationManager Nav
+
+<div style="max-width:900px;margin:0 auto">
+
+    <!-- Header -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+        <div>
+            <div style="font-size:20px;font-weight:700">Transactions</div>
+            <div style="font-size:13px;color:#6B7280;margin-top:2px">All your income and expenses</div>
+        </div>
+        <button class="btn btn-primary" @onclick='() => Nav.NavigateTo("/add")'>
+            + Add Transaction
+        </button>
+    </div>
+
+    <!-- Filter Bar -->
+    <div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;padding:16px 20px;margin-bottom:20px;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:12px;align-items:end">
+
+            <div>
+                <label style="font-size:12px;font-weight:500;color:#6B7280;display:block;margin-bottom:4px">From Date</label>
+                <input class="form-control" type="date" @bind="filterFrom" />
+            </div>
+
+            <div>
+                <label style="font-size:12px;font-weight:500;color:#6B7280;display:block;margin-bottom:4px">To Date</label>
+                <input class="form-control" type="date" @bind="filterTo" />
+            </div>
+
+            <div>
+                <label style="font-size:12px;font-weight:500;color:#6B7280;display:block;margin-bottom:4px">Account</label>
+                <select class="form-control" @bind="filterAccountId">
+                    <option value="">All Accounts</option>
+                    @foreach (var a in accounts)
+                    {
+                        <option value="@a.AccountId">@a.Name</option>
+                    }
+                </select>
+            </div>
+
+            <div>
+                <label style="font-size:12px;font-weight:500;color:#6B7280;display:block;margin-bottom:4px">Type</label>
+                <select class="form-control" @bind="filterType">
+                    <option value="">All Types</option>
+                    <option value="Income">Income</option>
+                    <option value="Expense">Expense</option>
+                </select>
+            </div>
+
+            <div style="display:flex;gap:8px">
+                <button class="btn btn-primary" @onclick="ApplyFilter">Apply</button>
+                <button class="btn btn-outline" @onclick="ResetFilter">Reset</button>
+            </div>
+        </div>
+
+        <!-- Search -->
+        <div style="margin-top:12px">
+            <input class="form-control" type="text" placeholder="🔍  Search by note or category..."
+                   @bind="searchText" @bind:event="oninput" />
+        </div>
+    </div>
+
+    <!-- Summary Strip -->
+    @if (!loading && filtered.Any())
+    {
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+            <div style="background:#DCFCE7;border-radius:12px;padding:14px 18px">
+                <div style="font-size:12px;font-weight:500;color:#15803D">Total Income</div>
+                <div style="font-size:20px;font-weight:700;color:#16A34A;margin-top:2px">
+                    ৳@filtered.Where(t => t.Type == "Income").Sum(t => t.Amount).ToString("N2")
+                </div>
+            </div>
+            <div style="background:#FEE2E2;border-radius:12px;padding:14px 18px">
+                <div style="font-size:12px;font-weight:500;color:#B91C1C">Total Expense</div>
+                <div style="font-size:20px;font-weight:700;color:#DC2626;margin-top:2px">
+                    ৳@filtered.Where(t => t.Type == "Expense").Sum(t => t.Amount).ToString("N2")
+                </div>
+            </div>
+            <div style="background:#EEF2FF;border-radius:12px;padding:14px 18px">
+                <div style="font-size:12px;font-weight:500;color:#4338CA">Net Balance</div>
+                @{
+                    var net = filtered.Where(t => t.Type == "Income").Sum(t => t.Amount)
+                    - filtered.Where(t => t.Type == "Expense").Sum(t => t.Amount);
+                }
+                <div style="font-size:20px;font-weight:700;color:@(net >= 0 ? "#4F46E5" : "#DC2626");margin-top:2px">
+                    ৳@net.ToString("N2")
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Loading -->
+    @if (loading)
+    {
+        <div style="text-align:center;padding:60px;background:#fff;border-radius:14px;border:1px solid #E5E7EB">
+            <div style="font-size:36px;margin-bottom:12px">⏳</div>
+            <div style="color:#6B7280;font-size:14px">Loading transactions...</div>
+        </div>
+    }
+    else if (!filtered.Any())
+    {
+        <div style="text-align:center;padding:60px;background:#fff;border-radius:14px;border:1px solid #E5E7EB">
+            <div style="font-size:48px;margin-bottom:14px">📭</div>
+            <div style="font-size:17px;font-weight:600;margin-bottom:6px">No transactions found</div>
+            <div style="font-size:13px;color:#6B7280;margin-bottom:20px">Try changing the filters or add a new transaction</div>
+            <button class="btn btn-primary" @onclick='() => Nav.NavigateTo("/add")'>+ Add Transaction</button>
+        </div>
+    }
+    else
+    {
+        <!-- Group transactions by date -->
+        @foreach (var group in GroupedTransactions)
+        {
+            <div style="margin-bottom:20px">
+
+                <!-- Date header -->
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+                    <div style="font-size:13px;font-weight:600;color:#374151">@FormatGroupDate(group.Key)</div>
+                    <div style="flex:1;height:1px;background:#E5E7EB"></div>
+                    <div style="font-size:12px;color:#6B7280">
+                        @group.Count() item@(group.Count() == 1 ? "" : "s")
+                    </div>
+                </div>
+
+                <!-- Transaction rows -->
+                <div style="display:flex;flex-direction:column;gap:8px">
+                    @foreach (var txn in group)
+                    {
+                        var cat = categories.FirstOrDefault(c => c.CategoryId == txn.CategoryId);
+                        var acc = accounts.FirstOrDefault(a => a.AccountId == txn.AccountId);
+
+                        <div style="background:#fff;border-radius:12px;border:1px solid #F3F4F6;padding:14px 16px;display:flex;align-items:center;gap:14px;transition:box-shadow .15s"
+                             @onmouseenter="@(e => hoveredId = txn.TransactionId)"
+                             @onmouseleave="@(e => hoveredId = "")">
+
+                            <!-- Category icon -->
+                            <div style="width:44px;height:44px;border-radius:11px;background:@(txn.Type == "Income" ? "#DCFCE7" : "#FEE2E2");display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">
+                                @(cat?.Icon ?? (txn.Type == "Income" ? "💰" : "💸"))
+                            </div>
+
+                            <!-- Details -->
+                            <div style="flex:1;min-width:0">
+                                <div style="font-size:14px;font-weight:600;color:#111827">
+                                    @(cat?.Name ?? "Other")
+                                </div>
+                                <div style="font-size:12px;color:#9CA3AF;margin-top:2px;display:flex;gap:8px;flex-wrap:wrap">
+                                    <span>🏦 @(acc?.Name ?? "Unknown")</span>
+                                    @if (!string.IsNullOrEmpty(txn.Note))
+                                    {
+                                        <span>• 📝 @txn.Note</span>
+                                    }
+                                </div>
+                            </div>
+
+                            <!-- Type badge -->
+                            <div>
+                                <span class="badge @(txn.Type == "Income" ? "badge-income" : "badge-expense")">
+                                    @txn.Type
+                                </span>
+                            </div>
+
+                            <!-- Amount -->
+                            <div style="text-align:right;flex-shrink:0">
+                                <div style="font-size:16px;font-weight:700;color:@(txn.Type == "Income" ? "#16A34A" : "#DC2626")">
+                                    @(txn.Type == "Income" ? "+" : "-")৳@txn.Amount.ToString("N2")
+                                </div>
+                                <div style="font-size:11px;color:#9CA3AF;margin-top:2px">
+                                    @txn.Date.ToString("hh:mm tt")
+                                </div>
+                            </div>
+
+                            <!-- Delete button -->
+                            @if (hoveredId == txn.TransactionId)
+                            {
+                                <button class="btn-icon" style="background:#FEE2E2;flex-shrink:0"
+                                        title="Delete"
+                                        @onclick="() => ConfirmDelete(txn)">
+                                    🗑️
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- Load more -->
+        @if (allTransactions.Count > pageSize * currentPage)
+        {
+            <div style="text-align:center;margin-top:8px">
+                <button class="btn btn-outline" @onclick="LoadMore">
+                    Load More (@(allTransactions.Count - pageSize * currentPage) remaining)
+                </button>
+            </div>
+        }
+    }
+</div>
+
+<!-- Delete confirmation modal -->
+@if (txnToDelete != null)
+{
+    <div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px">
+        <div style="background:#fff;border-radius:16px;padding:28px;max-width:400px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+            <div style="font-size:36px;text-align:center;margin-bottom:12px">🗑️</div>
+            <div style="font-size:17px;font-weight:600;text-align:center;margin-bottom:8px">Delete Transaction?</div>
+            <div style="font-size:14px;color:#6B7280;text-align:center;margin-bottom:24px">
+                This will permanently remove this transaction and reverse the account balance.
+            </div>
+            <div style="display:flex;gap:10px">
+                <button class="btn btn-danger" style="flex:1;justify-content:center"
+                        @onclick="DeleteTransaction" disabled="@deleting">
+                    @(deleting ? "Deleting..." : "Yes, Delete")
+                </button>
+                <button class="btn btn-outline" style="flex:1;justify-content:center"
+                        @onclick="() => txnToDelete = null">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    List<Transaction> allTransactions = new();
+    List<Transaction> filtered = new();
+    List<Account> accounts = new();
+    List<Category> categories = new();
+
+    bool loading = true;
+    bool deleting = false;
+    string hoveredId = "";
+
+    // Filters
+    DateTime filterFrom = DateTime.Now.AddMonths(-1);
+    DateTime filterTo = DateTime.Now;
+    string filterAccountId = "";
+    string filterType = "";
+    string searchText = "";
+
+    // Pagination
+    int pageSize = 20;
+    int currentPage = 1;
+
+    Transaction? txnToDelete = null;
+
+    // Read account filter from query string (coming from dashboard account card click)
+    [SupplyParameterFromQuery(Name = "account")]
+    public string? AccountQuery { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!string.IsNullOrEmpty(AccountQuery))
+            filterAccountId = AccountQuery;
+
+        accounts = await Sheets.GetAccountsAsync();
+        categories = await Sheets.GetCategoriesAsync();
+        await LoadTransactions();
+    }
+
+    async Task LoadTransactions()
+    {
+        loading = true;
+        allTransactions = await Sheets.GetTransactionsAsync(filterFrom, filterTo,
+                              string.IsNullOrEmpty(filterAccountId) ? null : filterAccountId);
+        ApplyLocalFilters();
+        loading = false;
+    }
+
+    async Task ApplyFilter()
+    {
+        currentPage = 1;
+        await LoadTransactions();
+    }
+
+    void ResetFilter()
+    {
+        filterFrom = DateTime.Now.AddMonths(-1);
+        filterTo = DateTime.Now;
+        filterAccountId = "";
+        filterType = "";
+        searchText = "";
+        currentPage = 1;
+        ApplyLocalFilters();
+    }
+
+    void ApplyLocalFilters()
+    {
+        var result = allTransactions.AsEnumerable();
+
+        if (!string.IsNullOrEmpty(filterType))
+            result = result.Where(t => t.Type == filterType);
+
+        if (!string.IsNullOrEmpty(searchText))
+        {
+            var q = searchText.ToLower();
+            result = result.Where(t =>
+                (t.Note?.ToLower().Contains(q) ?? false) ||
+                (categories.FirstOrDefault(c => c.CategoryId == t.CategoryId)
+                    ?.Name.ToLower().Contains(q) ?? false));
+        }
+
+        filtered = result.ToList();
+    }
+
+    void LoadMore() => currentPage++;
+
+    // Group by date, apply pagination
+    IEnumerable<IGrouping<string, Transaction>> GroupedTransactions =>
+        filtered
+            .Take(pageSize * currentPage)
+            .GroupBy(t => t.Date.ToString("yyyy-MM-dd"))
+            .OrderByDescending(g => g.Key);
+
+    string FormatGroupDate(string dateKey)
+    {
+        if (!DateTime.TryParse(dateKey, out var date)) return dateKey;
+        if (date.Date == DateTime.Today) return "Today";
+        if (date.Date == DateTime.Today.AddDays(-1)) return "Yesterday";
+        return date.ToString("dddd, dd MMMM yyyy");
+    }
+
+    void ConfirmDelete(Transaction txn) => txnToDelete = txn;
+
+    async Task DeleteTransaction()
+    {
+        if (txnToDelete == null) return;
+        deleting = true;
+        await Sheets.DeleteTransactionAsync(txnToDelete);
+        deleting = false;
+        txnToDelete = null;
+        await LoadTransactions();
+    }
+}

@@ -80,6 +80,75 @@ else
 @code {
     bool sidebarOpen = false;
     string pageTitle = "Dashboard";
+    bool _initialized = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Restore session from localStorage on every page load/refresh
+        await Auth.InitAsync();
+
+        // Subscribe to auth state changes so UI re-renders on login/logout
+        Auth.AuthStateChanged += OnAuthStateChanged;
+
+        // Subscribe to route changes for page title updates
+        Nav.LocationChanged += OnLocationChanged;
+        SetTitle(Nav.Uri);
+
+        _initialized = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _initialized)
+        {
+            // After first render, redirect to login if not authenticated
+            // and not already on login or callback page
+            var isLoginPage = Nav.Uri.Contains("/login");
+            var isCallbackPage = Nav.Uri.Contains("/auth/callback");
+            var isAuthPage = Nav.Uri.Contains("access_token");
+
+            if (!Auth.IsLoggedIn && !isLoginPage && !isCallbackPage && !isAuthPage)
+            {
+                Nav.NavigateTo("/login");
+            }
+        }
+    }
+
+    void OnAuthStateChanged()
+    {
+        InvokeAsync(StateHasChanged);
+
+        if (!Auth.IsLoggedIn)
+        {
+            Nav.NavigateTo("/login");
+        }
+        else
+        {
+            // After login, go to dashboard if sitting on login page
+            if (Nav.Uri.Contains("/login") || Nav.Uri.Contains("/auth/callback"))
+            {
+                Nav.NavigateTo("/");
+            }
+        }
+    }
+
+    void OnLocationChanged(object? s, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        SetTitle(e.Location);
+        CloseSidebar();
+    }
+
+    void SetTitle(string uri)
+    {
+        pageTitle = uri.Contains("/accounts") ? "Accounts"
+                  : uri.Contains("/transactions") ? "Transactions"
+                  : uri.Contains("/add") ? "Add Transaction"
+                  : uri.Contains("/transfer") ? "Transfer Money"
+                  : uri.Contains("/settings") ? "Settings"
+                  : uri.Contains("/login") ? "Login"
+                  : "Dashboard";
+        StateHasChanged();
+    }
 
     void ToggleSidebar() => sidebarOpen = !sidebarOpen;
     void CloseSidebar() => sidebarOpen = false;
@@ -87,26 +156,12 @@ else
     async Task Logout()
     {
         await Auth.LogoutAsync();
-        Nav.NavigateTo("/", true);
+        Nav.NavigateTo("/login", forceLoad: true);
     }
 
-    protected override void OnInitialized()
+    public void Dispose()
     {
-        Nav.LocationChanged += OnLocationChanged;
-        SetTitle(Nav.Uri);
-    }
-
-    void OnLocationChanged(object? s, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
-        => SetTitle(e.Location);
-
-    void SetTitle(string uri)
-    {
-        pageTitle = uri.Contains("/accounts") ? "Accounts"
-            : uri.Contains("/transactions") ? "Transactions"
-            : uri.Contains("/add") ? "Add Transaction"
-            : uri.Contains("/transfer") ? "Transfer Money"
-            : uri.Contains("/settings") ? "Settings"
-            : "Dashboard";
-        StateHasChanged();
+        Auth.AuthStateChanged -= OnAuthStateChanged;
+        Nav.LocationChanged -= OnLocationChanged;
     }
 }

@@ -1,4 +1,4 @@
-﻿using Microsoft.JSInterop;
+﻿using Blazored.LocalStorage;
 
 namespace WalletApp.Services;
 
@@ -50,8 +50,11 @@ public class AuthService
 
     private string GetRedirectUri()
     {
-        // Update this to match your deployed URL
-        return "http://localhost:5000/auth/callback";
+        return "https://localhost:5000/auth/callback";
+        //var isDevelopment = _config["Environment:IsDevelopment"];
+        //var redirectUrl = isDevelopment == "true" ? "https://localhost:5000" : "";
+        //// Update this to match your deployed URL
+        //return redirectUrl +"/auth/callback";
     }
 
     public async Task HandleCallbackAsync(string accessToken, string? email, string? name, string? photo)

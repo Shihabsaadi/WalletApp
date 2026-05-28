@@ -145,14 +145,18 @@ else if (stats != null)
 
     async Task LoadData()
     {
-        loading = true;
-        StateHasChanged();
-        accounts = await Sheets.GetAccountsAsync();
-        categories = await Sheets.GetCategoriesAsync();
-        var accIds = string.IsNullOrEmpty(filterAccountId) ? null : new List<string> { filterAccountId };
-        stats = await Sheets.GetDashboardStatsAsync(filterFrom, filterTo, accIds);
-        recentTxns = (await Sheets.GetTransactionsAsync(filterFrom, filterTo, string.IsNullOrEmpty(filterAccountId) ? null : filterAccountId)).Take(8).ToList();
-        loading = false;
+        if (Auth.IsLoggedIn)
+        {
+            loading = true;
+            StateHasChanged();
+            accounts = await Sheets.GetAccountsAsync();
+            categories = await Sheets.GetCategoriesAsync();
+            var accIds = string.IsNullOrEmpty(filterAccountId) ? null : new List<string> { filterAccountId };
+            stats = await Sheets.GetDashboardStatsAsync(filterFrom, filterTo, accIds);
+            recentTxns = (await Sheets.GetTransactionsAsync(filterFrom, filterTo, string.IsNullOrEmpty(filterAccountId) ? null : filterAccountId)).Take(8).ToList();
+            loading = false;
+        }
+       
     }
 
     async Task ExportExcel()
