@@ -1,0 +1,13 @@
+[build]
+  command = "dotnet publish WalletApp/WalletApp.csproj -c Release -o release"
+  publish = "release/wwwroot"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/_framework/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800, immutable"
