@@ -1,46 +1,63 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>WalletApp</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+    <title>My Wallet</title>
     <base href="/" />
-    <link rel="preload" id="webassembly" />
-    <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="css/app.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
-    <link href="WalletApp.styles.css" rel="stylesheet" />
-    <link href="manifest.webmanifest" rel="manifest" />
-    <link rel="apple-touch-icon" sizes="512x512" href="icon-512.png" />
-    <link rel="apple-touch-icon" sizes="192x192" href="icon-192.png" />
-    <script type="importmap"></script>
 </head>
-
 <body>
     <div id="app">
-        <svg class="loading-progress">
-            <circle r="40%" cx="50%" cy="50%" />
-            <circle r="40%" cx="50%" cy="50%" />
-        </svg>
-        <div class="loading-progress-text"></div>
+        <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#4F46E5,#7C3AED)">
+            <div style="background:#fff;border-radius:20px;padding:40px;text-align:center;width:320px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+                <div style="font-size:48px;margin-bottom:16px">💰</div>
+                <div style="font-size:18px;font-weight:600;margin-bottom:8px;color:#111827">My Wallet</div>
+                <div style="font-size:13px;color:#6B7280">Loading your wallet...</div>
+                <div style="margin-top:20px;height:4px;background:#F3F4F6;border-radius:2px;overflow:hidden">
+                    <div style="height:100%;width:60%;background:linear-gradient(90deg,#4F46E5,#7C3AED);border-radius:2px;animation:slide 1.2s ease-in-out infinite"></div>
+                </div>
+            </div>
+        </div>
+        <style>
+            @keyframes slide {
+                0% {
+                    transform: translateX(-100%);
+                }
+
+                100% {
+                    transform: translateX(250%);
+                }
+            }
+        </style>
     </div>
 
-    <div id="blazor-error-ui">
+    <div id="blazor-error-ui" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#FEE2E2;color:#DC2626;padding:12px 20px;font-size:13px;z-index:9999">
         An unhandled error has occurred.
-        <a href="." class="reload">Reload</a>
-        <span class="dismiss">🗙</span>
+        <a href="" style="color:#DC2626;font-weight:600">Reload</a>
     </div>
-    <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
-    <script>navigator.serviceWorker.register('service-worker.js', { updateViaCache: 'none' });</script>
+
     <script>
+        // Unregister ALL existing service workers — clears the broken cached SW
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(registrations => {
+                registrations.forEach(r => r.unregister());
+                console.log('Service workers cleared');
+            });
+        }
+
+        // File download helper used by export feature
         function downloadFile(filename, mimeType, base64) {
-            const a = document.createElement('a');
-            a.href = 'data:' + mimeType + ';base64,' + base64;
-            a.download = filename;
-            a.click();
+            const link = document.createElement('a');
+            link.href = 'data:' + mimeType + ';base64,' + base64;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
     </script>
-</body>
 
+    <script src="_framework/blazor.webassembly.js"></script>
+</body>
 </html>
