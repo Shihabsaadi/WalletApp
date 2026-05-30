@@ -1,0 +1,447 @@
+﻿@page "/recurring"
+@using WalletApp.Services
+@using WalletApp.Models
+@inject GoogleSheetsService Sheets
+
+<div style="max-width:800px;margin:0 auto">
+
+    <!-- Header -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+        <div>
+            <div style="font-size:20px;font-weight:700">Recurring Transactions</div>
+            <div style="font-size:13px;color:#6B7280;margin-top:2px">
+                Auto-created on schedule — salary, rent, subscriptions
+            </div>
+        </div>
+        <button class="btn btn-primary" @onclick="ShowAddForm">+ Add Recurring</button>
+    </div>
+
+    <!-- Add / Edit Form -->
+    @if (showForm)
+    {
+        <div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;padding:24px;margin-bottom:24px;box-shadow:0 2px 8px rgba(0,0,0,.06)">
+            <div style="font-size:16px;font-weight:600;margin-bottom:18px">
+                @(editingId == null ? "➕ New Recurring Transaction" : "✏️ Edit Recurring Transaction")
+            </div>
+
+            <!-- Name -->
+            <div class="form-group">
+                <label class="form-label">Name</label>
+                <input class="form-control" type="text"
+                       placeholder="e.g. Monthly Salary, House Rent, Netflix..."
+                       @bind="formName" />
+            </div>
+
+            <!-- Type toggle -->
+            <div class="form-group">
+                <label class="form-label">Type</label>
+                <div class="type-toggle">
+                    <button class="type-btn @(formType == "Income" ? "active-income" : "")"
+                            @onclick='() => formType = "Income"'>
+                        💰 Income
+                    </button>
+                    <button class="type-btn @(formType == "Expense" ? "active-expense" : "")"
+                            @onclick='() => formType = "Expense"'>
+                        💸 Expense
+                    </button>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <!-- Amount -->
+                <div class="form-group">
+                    <label class="form-label">Amount (৳)</label>
+                    <input class="form-control" type="number" step="0.01"
+                           placeholder="0.00" @bind="formAmount"
+                           style="font-size:20px;font-weight:700;color:#4F46E5" />
+                </div>
+                <!-- Frequency -->
+                <div class="form-group">
+                    <label class="form-label">Frequency</label>
+                    <select class="form-control" @bind="formFrequency">
+                        <option value="Daily">📅 Daily</option>
+                        <option value="Weekly">📅 Weekly</option>
+                        <option value="Monthly">📅 Monthly</option>
+                        <option value="Yearly">📅 Yearly</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <!-- Account -->
+                <div class="form-group">
+                    <label class="form-label">Account</label>
+                    <select class="form-control" @bind="formAccountId">
+                        <option value="">Select account</option>
+                        @foreach (var a in accounts)
+                        {
+                            <option value="@a.AccountId">@a.Name</option>
+                        }
+                    </select>
+                </div>
+                <!-- Category -->
+                <div class="form-group">
+                    <label class="form-label">Category</label>
+                    <select class="form-control" @bind="formCategoryId">
+                        <option value="">Select category</option>
+                        @foreach (var c in categories.Where(c => c.Type == formType))
+                        {
+                            <option value="@c.CategoryId">@c.Icon @c.Name</option>
+                        }
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <!-- Start date -->
+                <div class="form-group">
+                    <label class="form-label">Start Date</label>
+                    <input class="form-control" type="date" @bind="formStartDate" />
+                </div>
+                <!-- Note -->
+                <div class="form-group">
+                    <label class="form-label">Note (optional)</label>
+                    <input class="form-control" type="text"
+                           placeholder="e.g. Company name, landlord..."
+                           @bind="formNote" />
+                </div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(formError))
+            {
+                <div style="background:#FEE2E2;color:#DC2626;padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:13px">
+                    @formError
+                </div>
+            }
+
+            <div style="display:flex;gap:10px">
+                <button class="btn btn-primary" @onclick="SaveRecurring" disabled="@saving">
+                    @(saving ? "Saving..." : editingId == null ? "Create" : "Save Changes")
+                </button>
+                <button class="btn btn-outline" @onclick="CancelForm">Cancel</button>
+            </div>
+        </div>
+    }
+
+    <!-- Loading -->
+    @if (loading)
+    {
+        <div style="text-align:center;padding:60px;background:#fff;border-radius:14px;border:1px solid #E5E7EB">
+            <div style="font-size:36px;margin-bottom:12px">⏳</div>
+            <div style="color:#6B7280;font-size:14px">Loading recurring transactions...</div>
+        </div>
+    }
+    else if (!recurrings.Any())
+    {
+        <div style="text-align:center;padding:60px;background:#fff;border-radius:14px;border:1px solid #E5E7EB">
+            <div style="font-size:48px;margin-bottom:14px">🔁</div>
+            <div style="font-size:17px;font-weight:600;margin-bottom:6px">No recurring transactions yet</div>
+            <div style="font-size:13px;color:#6B7280;margin-bottom:20px">
+                Set up salary, rent, subscriptions — they will be auto-created on schedule
+            </div>
+            <button class="btn btn-primary" @onclick="ShowAddForm">+ Add First Recurring</button>
+        </div>
+    }
+    else
+    {
+        <!-- Summary -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+            <div style="background:#DCFCE7;border-radius:12px;padding:14px 18px">
+                <div style="font-size:12px;font-weight:500;color:#15803D">Monthly Income</div>
+                <div style="font-size:20px;font-weight:700;color:#16A34A;margin-top:2px">
+                    ৳@MonthlyIncome.ToString("N0")
+                </div>
+            </div>
+            <div style="background:#FEE2E2;border-radius:12px;padding:14px 18px">
+                <div style="font-size:12px;font-weight:500;color:#B91C1C">Monthly Expense</div>
+                <div style="font-size:20px;font-weight:700;color:#DC2626;margin-top:2px">
+                    ৳@MonthlyExpense.ToString("N0")
+                </div>
+            </div>
+            <div style="background:#EEF2FF;border-radius:12px;padding:14px 18px">
+                <div style="font-size:12px;font-weight:500;color:#4338CA">Active Rules</div>
+                <div style="font-size:20px;font-weight:700;color:#4F46E5;margin-top:2px">
+                    @recurrings.Count(r => r.IsActive)
+                </div>
+            </div>
+        </div>
+
+        <!-- Recurring list -->
+        <div style="display:flex;flex-direction:column;gap:10px">
+            @foreach (var r in recurrings.OrderBy(r => r.NextDueDate))
+            {
+                var cat = categories.FirstOrDefault(c => c.CategoryId == r.CategoryId);
+                var acc = accounts.FirstOrDefault(a => a.AccountId == r.AccountId);
+                var isDue = r.NextDueDate.Date <= DateTime.Today && r.IsActive;
+                var daysUntil = (r.NextDueDate.Date - DateTime.Today).Days;
+
+                <div style="background:#fff;border-radius:12px;border:1px solid @(isDue ? "#FCA5A5" : "#F3F4F6");padding:16px 18px;display:flex;align-items:center;gap:14px;opacity:@(r.IsActive ? "1" : ".6")"
+                     @onmouseenter="() => hoveredId = r.RecurringId"
+                     @onmouseleave="() => hoveredId = string.Empty">
+
+                    <!-- Icon -->
+                    <div style="width:48px;height:48px;border-radius:12px;background:@(r.Type == "Income" ? "#DCFCE7" : "#FEE2E2");display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">
+                        @(cat?.Icon ?? (r.Type == "Income" ? "💰" : "💸"))
+                    </div>
+
+                    <!-- Info -->
+                    <div style="flex:1;min-width:0">
+                        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                            <div style="font-size:15px;font-weight:600;color:#111827">@r.Name</div>
+                            @if (!r.IsActive)
+                            {
+                                <span style="background:#F3F4F6;color:#6B7280;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600">Paused</span>
+                            }
+                            @if (isDue)
+                            {
+                                <span style="background:#FEE2E2;color:#DC2626;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600">⚠️ Overdue</span>
+                            }
+                        </div>
+                        <div style="font-size:12px;color:#9CA3AF;margin-top:4px;display:flex;gap:10px;flex-wrap:wrap">
+                            <span>🔁 @r.FrequencyLabel</span>
+                            <span>🏦 @(acc?.Name ?? "Unknown")</span>
+                            <span>
+                                📅 Next: @r.NextDueDate.ToString("dd MMM yyyy")
+                                @if (r.IsActive)
+                                {
+                                    @(daysUntil == 0 ? " (today)" :
+                                                            daysUntil == 1 ? " (tomorrow)" :
+                                                            daysUntil < 0 ? $" ({Math.Abs(daysUntil)}d overdue)" :
+                                                            $" (in {daysUntil}d)")
+                                }
+                            </span>
+                            @if (!string.IsNullOrEmpty(r.Note))
+                            {
+                                <span>📝 @r.Note</span>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Amount -->
+                    <div style="text-align:right;flex-shrink:0">
+                        <div style="font-size:18px;font-weight:700;color:@(r.Type == "Income" ? "#16A34A" : "#DC2626")">
+                            @(r.Type == "Income" ? "+" : "-")৳@r.Amount.ToString("N0")
+                        </div>
+                        <div style="font-size:11px;color:#9CA3AF;margin-top:2px">per @r.Frequency.ToLower()</div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div style="display:flex;gap:6px;opacity:@(hoveredId == r.RecurringId ? "1" : "0.2");transition:opacity .15s">
+                        <!-- Pause / Resume toggle -->
+                        <button class="btn-icon"
+                                title="@(r.IsActive ? "Pause" : "Resume")"
+                                style="background:@(r.IsActive ? "#FEF3C7" : "#DCFCE7")"
+                                @onclick="() => ToggleActive(r)">
+                            @(r.IsActive ? "⏸️" : "▶️")
+                        </button>
+                        <!-- Edit -->
+                        <button class="btn-icon" title="Edit"
+                                @onclick="() => StartEdit(r)">
+                            ✏️
+                        </button>
+                        <!-- Delete -->
+                        <button class="btn-icon" title="Delete"
+                                style="background:#FEE2E2"
+                                @onclick="() => ConfirmDelete(r)">
+                            🗑️
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<!-- Delete confirmation -->
+@if (recurringToDelete != null)
+{
+    <div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px">
+        <div style="background:#fff;border-radius:16px;padding:28px;max-width:400px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+            <div style="font-size:36px;text-align:center;margin-bottom:12px">⚠️</div>
+            <div style="font-size:17px;font-weight:600;text-align:center;margin-bottom:8px">Delete Recurring?</div>
+            <div style="font-size:14px;color:#6B7280;text-align:center;margin-bottom:6px">
+                Are you sure you want to delete
+            </div>
+            <div style="text-align:center;margin-bottom:20px">
+                <strong style="font-size:15px">@recurringToDelete.Name</strong>
+            </div>
+            <div style="background:#FFF7ED;border-radius:10px;padding:12px;margin-bottom:20px;font-size:13px;color:#92400E;text-align:center">
+                ⚠️ Past transactions already created will not be affected
+            </div>
+            <div style="display:flex;gap:10px">
+                <button class="btn btn-danger" style="flex:1;justify-content:center"
+                        @onclick="DeleteRecurring" disabled="@saving">
+                    @(saving ? "Deleting..." : "Yes, Delete")
+                </button>
+                <button class="btn btn-outline" style="flex:1;justify-content:center"
+                        @onclick="() => recurringToDelete = null">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    List<RecurringTransaction> recurrings = new();
+    List<Account> accounts = new();
+    List<Category> categories = new();
+    bool loading = true;
+    bool saving = false;
+    bool showForm = false;
+    string hoveredId = "";
+    string formError = "";
+
+    // Form fields
+    string? editingId = null;
+    string formName = "";
+    string formType = "Expense";
+    decimal formAmount = 0;
+    string formFrequency = "Monthly";
+    string formAccountId = "";
+    string formCategoryId = "";
+    DateTime formStartDate = DateTime.Today;
+    string formNote = "";
+
+    RecurringTransaction? recurringToDelete = null;
+
+    // Monthly equivalents for summary
+    decimal MonthlyIncome => recurrings
+        .Where(r => r.IsActive && r.Type == "Income")
+        .Sum(r => r.Frequency switch
+        {
+            "Daily" => r.Amount * 30,
+            "Weekly" => r.Amount * 4,
+            "Monthly" => r.Amount,
+            "Yearly" => r.Amount / 12,
+            _ => r.Amount
+        });
+
+    decimal MonthlyExpense => recurrings
+        .Where(r => r.IsActive && r.Type == "Expense")
+        .Sum(r => r.Frequency switch
+        {
+            "Daily" => r.Amount * 30,
+            "Weekly" => r.Amount * 4,
+            "Monthly" => r.Amount,
+            "Yearly" => r.Amount / 12,
+            _ => r.Amount
+        });
+
+    protected override async Task OnInitializedAsync()
+    {
+        accounts = await Sheets.GetAccountsAsync();
+        categories = await Sheets.GetCategoriesAsync();
+        await LoadRecurrings();
+    }
+
+    async Task LoadRecurrings()
+    {
+        loading = true;
+        recurrings = await Sheets.GetRecurringTransactionsAsync();
+        loading = false;
+    }
+
+    void ShowAddForm()
+    {
+        editingId = null;
+        formName = "";
+        formType = "Expense";
+        formAmount = 0;
+        formFrequency = "Monthly";
+        formAccountId = accounts.FirstOrDefault()?.AccountId ?? "";
+        formCategoryId = "";
+        formStartDate = DateTime.Today;
+        formNote = "";
+        formError = "";
+        showForm = true;
+    }
+
+    void StartEdit(RecurringTransaction r)
+    {
+        editingId = r.RecurringId;
+        formName = r.Name;
+        formType = r.Type;
+        formAmount = r.Amount;
+        formFrequency = r.Frequency;
+        formAccountId = r.AccountId;
+        formCategoryId = r.CategoryId;
+        formStartDate = r.StartDate;
+        formNote = r.Note;
+        formError = "";
+        showForm = true;
+    }
+
+    void CancelForm()
+    {
+        showForm = false;
+        editingId = null;
+        formError = "";
+    }
+
+    async Task SaveRecurring()
+    {
+        if (string.IsNullOrWhiteSpace(formName)) { formError = "Please enter a name."; return; }
+        if (formAmount <= 0) { formError = "Amount must be greater than zero."; return; }
+        if (string.IsNullOrEmpty(formAccountId)) { formError = "Please select an account."; return; }
+        if (string.IsNullOrEmpty(formCategoryId)) { formError = "Please select a category."; return; }
+
+        saving = true; formError = "";
+
+        if (editingId == null)
+        {
+            var newR = new RecurringTransaction
+            {
+                Name = formName.Trim(),
+                Type = formType,
+                Amount = formAmount,
+                Frequency = formFrequency,
+                AccountId = formAccountId,
+                CategoryId = formCategoryId,
+                StartDate = formStartDate,
+                NextDueDate = formStartDate,
+                Note = formNote.Trim(),
+                IsActive = true,
+                CreatedAt = DateTime.Now
+            };
+            await Sheets.AddRecurringTransactionAsync(newR);
+        }
+        else
+        {
+            var existing = recurrings.First(r => r.RecurringId == editingId);
+            existing.Name = formName.Trim();
+            existing.Type = formType;
+            existing.Amount = formAmount;
+            existing.Frequency = formFrequency;
+            existing.AccountId = formAccountId;
+            existing.CategoryId = formCategoryId;
+            existing.StartDate = formStartDate;
+            existing.Note = formNote.Trim();
+            await Sheets.UpdateRecurringTransactionAsync(existing);
+        }
+
+        saving = false;
+        showForm = false;
+        editingId = null;
+        await LoadRecurrings();
+    }
+
+    async Task ToggleActive(RecurringTransaction r)
+    {
+        r.IsActive = !r.IsActive;
+        await Sheets.UpdateRecurringTransactionAsync(r);
+        await LoadRecurrings();
+    }
+
+    void ConfirmDelete(RecurringTransaction r) => recurringToDelete = r;
+
+    async Task DeleteRecurring()
+    {
+        if (recurringToDelete == null) return;
+        saving = true;
+        await Sheets.DeleteRecurringTransactionAsync(recurringToDelete.RecurringId);
+        recurringToDelete = null;
+        saving = false;
+        await LoadRecurrings();
+    }
+}

@@ -2,6 +2,7 @@
 @inherits LayoutComponentBase
 @inject AuthService Auth
 @inject NavigationManager Nav
+@inject GoogleSheetsService Sheets
 
 @if (!Auth.IsLoggedIn)
 {
@@ -40,6 +41,9 @@ else
                 <NavLink class="nav-item" href="/transfer" @onclick="CloseSidebar">
                     <span class="nav-icon">🔄</span> Transfer
                 </NavLink>
+                <NavLink class="nav-item" href="/recurring" @onclick="CloseSidebar">
+                    <span class="nav-icon">🔁</span> Recurring
+                </NavLink>
                 <div class="nav-section-label" style="margin-top:8px">Other</div>
                 <NavLink class="nav-item" href="/settings" @onclick="CloseSidebar">
                     <span class="nav-icon">⚙️</span> Settings
@@ -74,6 +78,25 @@ else
                     <button class="btn btn-primary btn-sm" @onclick='() => Nav.NavigateTo("/add")'>+ Add Transaction</button>
                 </div>
             </header>
+            <!-- Recurring transaction processed banner -->
+            @if (showProcessedBanner)
+            {
+                <div style="background:#DCFCE7;border-bottom:1px solid #BBF7D0;padding:12px 24px;display:flex;align-items:flex-start;gap:12px">
+                    <div style="font-size:20px">✅</div>
+                    <div style="flex:1">
+                        <div style="font-size:14px;font-weight:600;color:#15803D;margin-bottom:4px">
+                            @processedNotifications.Count recurring transaction@(processedNotifications.Count == 1 ? "" : "s") processed
+                        </div>
+                        <div style="font-size:12px;color:#16A34A">
+                            @string.Join(" • ", processedNotifications)
+                        </div>
+                    </div>
+                    <button @onclick="() => showProcessedBanner = false"
+                            style="background:none;border:none;cursor:pointer;font-size:16px;color:#16A34A">
+                        ✕
+                    </button>
+                </div>
+            }
             <div class="page-body">
                 @Body
             </div>
@@ -85,7 +108,8 @@ else
     bool sidebarOpen = false;
     string pageTitle = "Dashboard";
     bool _initialized = false;
-
+    List<string> processedNotifications = new();
+    bool showProcessedBanner = false;
     protected override async Task OnInitializedAsync()
     {
         // Restore session from localStorage on every page load/refresh
@@ -99,6 +123,29 @@ else
         SetTitle(Nav.Uri);
 
         _initialized = true;
+        if (Auth.IsLoggedIn)
+            await ProcessRecurring();
+    }
+
+
+    async Task ProcessRecurring()
+    {
+        try
+        {
+            var processed = await Sheets.ProcessDueRecurringTransactionsAsync();
+            if (processed.Any())
+            {
+                processedNotifications = processed;
+                showProcessedBanner = true;
+                StateHasChanged();
+
+                // Auto-hide after 8 seconds
+                await Task.Delay(8000);
+                showProcessedBanner = false;
+                StateHasChanged();
+            }
+        }
+        catch { /* silently ignore if sheets not set up yet */ }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -146,10 +193,11 @@ else
     {
         pageTitle = uri.Contains("/accounts") ? "Accounts"
                   : uri.Contains("/transactions") ? "Transactions"
+                  : uri.Contains("/transfers") ? "Transfer History"
                   : uri.Contains("/add") ? "Add Transaction"
                   : uri.Contains("/transfer") ? "Transfer Money"
+                  : uri.Contains("/recurring") ? "Recurring Transactions"
                   : uri.Contains("/settings") ? "Settings"
-                  : uri.Contains("/login") ? "Login"
                   : "Dashboard";
         StateHasChanged();
     }

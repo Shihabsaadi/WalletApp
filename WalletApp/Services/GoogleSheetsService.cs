@@ -389,6 +389,87 @@ public class GoogleSheetsService
             }
         }
     }
+
+    // ── Recurring Transactions ────────────────────────────────────────────
+
+    public async Task<List<RecurringTransaction>> GetRecurringTransactionsAsync()
+    {
+        var rows = await ReadRange("Recurring!A2:L");
+        return rows.Select(RecurringTransaction.FromRow)
+                   .Where(r => !string.IsNullOrEmpty(r.RecurringId))
+                   .OrderBy(r => r.NextDueDate)
+                   .ToList();
+    }
+
+    public async Task AddRecurringTransactionAsync(RecurringTransaction recurring)
+        => await AppendRow("Recurring!A:L", recurring.ToRow());
+
+    public async Task UpdateRecurringTransactionAsync(RecurringTransaction recurring)
+    {
+        var rows = await ReadRange("Recurring!A2:L");
+        for (int i = 0; i < rows.Count; i++)
+        {
+            if (rows[i].Count > 0 && rows[i][0]?.ToString() == recurring.RecurringId)
+            {
+                await UpdateRow($"Recurring!A{i + 2}:L{i + 2}", recurring.ToRow());
+                return;
+            }
+        }
+    }
+
+    public async Task DeleteRecurringTransactionAsync(string recurringId)
+    {
+        var rows = await ReadRange("Recurring!A2:L");
+        for (int i = 0; i < rows.Count; i++)
+        {
+            if (rows[i].Count > 0 && rows[i][0]?.ToString() == recurringId)
+            {
+                var emptyRow = new List<object> { "", "", "", "", "", "", "", "", "", "", "", "" };
+                await UpdateRow($"Recurring!A{i + 2}:L{i + 2}", emptyRow);
+                return;
+            }
+        }
+    }
+
+    // Called on app load — processes all overdue recurring transactions
+    public async Task<List<string>> ProcessDueRecurringTransactionsAsync()
+    {
+        var processed = new List<string>();
+        var recurrings = await GetRecurringTransactionsAsync();
+        var today = DateTime.Today;
+
+        foreach (var r in recurrings.Where(r => r.IsActive && r.NextDueDate.Date <= today))
+        {
+            // Keep creating transactions for every missed period
+            var current = r.NextDueDate;
+            while (current.Date <= today)
+            {
+                var txn = new Transaction
+                {
+                    Type = r.Type,
+                    Amount = r.Amount,
+                    AccountId = r.AccountId,
+                    CategoryId = r.CategoryId,
+                    Date = current,
+                    Note = string.IsNullOrEmpty(r.Note)
+                                 ? $"Auto: {r.Name}"
+                                 : $"Auto: {r.Name} — {r.Note}",
+                    CreatedAt = DateTime.Now
+                };
+                await AddTransactionAsync(txn);
+                processed.Add($"{r.Name} (৳{r.Amount:N0}) on {current:dd MMM}");
+
+                // Advance to next period
+                r.NextDueDate = r.CalculateNextDueDate();
+                current = r.NextDueDate;
+            }
+
+            // Save updated NextDueDate
+            await UpdateRecurringTransactionAsync(r);
+        }
+
+        return processed;
+    }
     // ── JSON model for Sheets API response ───────────────────────────
 
     private class SheetValueRange
