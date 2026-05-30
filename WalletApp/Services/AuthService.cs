@@ -51,9 +51,9 @@ public class AuthService
     private string GetRedirectUri()
     {
         // Automatically use the right URI based on where the app is running
-        //var configured = _config["Google:RedirectUri"] ?? "";
-        //if (!string.IsNullOrEmpty(configured))
-        //    return configured;
+        var configured = _config["Auth:RedirectUri"] ?? "";
+        if (!string.IsNullOrEmpty(configured))
+            return configured;
 
         return "https://localhost:5000/auth/callback";
     }
