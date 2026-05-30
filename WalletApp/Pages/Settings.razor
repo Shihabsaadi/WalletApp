@@ -1,0 +1,469 @@
+﻿@page "/settings"
+@using WalletApp.Services
+@using WalletApp.Models
+@inject GoogleSheetsService Sheets
+
+<div style="max-width:700px;margin:0 auto">
+
+    <!-- Header -->
+    <div style="margin-bottom:24px">
+        <div style="font-size:20px;font-weight:700">Settings</div>
+        <div style="font-size:13px;color:#6B7280;margin-top:2px">Manage your categories and app preferences</div>
+    </div>
+
+
+    <!-- Tab switcher -->
+    <div style="display:flex;gap:4px;background:#F3F4F6;border-radius:10px;padding:4px;margin-bottom:24px;width:fit-content">
+        <button style="padding:8px 20px;border-radius:8px;border:none;font-size:14px;font-weight:500;cursor:pointer;transition:all .15s;background:@(activeTab == "expense" ? "#fff" : "transparent");color:@(activeTab == "expense" ? "#DC2626" : "#6B7280");box-shadow:@(activeTab == "expense" ? "0 1px 3px rgba(0,0,0,.1)" : "none")"
+                @onclick='() => activeTab = "expense"'>
+            💸 Expense Categories
+        </button>
+        <button style="padding:8px 20px;border-radius:8px;border:none;font-size:14px;font-weight:500;cursor:pointer;transition:all .15s;background:@(activeTab == "income" ? "#fff" : "transparent");color:@(activeTab == "income" ? "#16A34A" : "#6B7280");box-shadow:@(activeTab == "income" ? "0 1px 3px rgba(0,0,0,.1)" : "none")"
+                @onclick='() => activeTab = "income"'>
+            💰 Income Categories
+        </button>
+    </div>
+
+    <!-- Add new category form -->
+    <div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;padding:20px 24px;margin-bottom:20px;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+        <div style="font-size:15px;font-weight:600;margin-bottom:16px">
+            ➕ Add New @(activeTab == "expense" ? "Expense" : "Income") Category
+        </div>
+
+        <div style="display:grid;grid-template-columns:80px 1fr auto;gap:12px;align-items:end">
+            <!-- Icon picker -->
+            <div>
+                <label style="font-size:12px;font-weight:500;color:#6B7280;display:block;margin-bottom:6px">Icon</label>
+                <div style="position:relative">
+                    <button @onclick="ToggleIconPicker"
+                            style="width:100%;height:42px;border:1.5px solid #E5E7EB;border-radius:8px;background:#fff;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center">
+                        @newIcon
+                    </button>
+                    @if (showIconPicker)
+                    {
+                        <div style="position:absolute;top:48px;left:0;background:#fff;border:1px solid #E5E7EB;border-radius:12px;padding:12px;z-index:100;box-shadow:0 8px 24px rgba(0,0,0,.12);display:grid;grid-template-columns:repeat(7,36px);gap:4px;width:280px">
+                            @foreach (var emoji in AllIcons)
+                            {
+                                <button @onclick="() => SelectIcon(emoji)"
+                                        style="width:36px;height:36px;border:none;background:@(newIcon == emoji ? "#EEF2FF" : "transparent");border-radius:6px;font-size:18px;cursor:pointer;transition:background .1s">
+                                    @emoji
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Name input -->
+            <div>
+                <label style="font-size:12px;font-weight:500;color:#6B7280;display:block;margin-bottom:6px">Category Name</label>
+                <input class="form-control"
+                       type="text"
+                       placeholder="e.g. Groceries, Transport, Bonus..."
+                       @bind="newName"
+                       @onkeydown="OnEnterAdd" />
+            </div>
+
+            <!-- Add button -->
+            <button class="btn @(activeTab == "expense" ? "btn-danger" : "btn-success")"
+                    style="height:42px;white-space:nowrap"
+                    @onclick="AddCategory"
+                    disabled="@saving">
+                @(saving ? "Adding..." : "Add")
+            </button>
+        </div>
+
+        @if (!string.IsNullOrEmpty(formError))
+        {
+            <div style="background:#FEE2E2;color:#DC2626;padding:10px 14px;border-radius:8px;margin-top:12px;font-size:13px">
+                @formError
+            </div>
+        }
+        @if (!string.IsNullOrEmpty(successMsg))
+        {
+            <div style="background:#DCFCE7;color:#16A34A;padding:10px 14px;border-radius:8px;margin-top:12px;font-size:13px">
+                @successMsg
+            </div>
+        }
+    </div>
+
+    <!-- Category list -->
+    @if (loading)
+    {
+        <div style="text-align:center;padding:60px;background:#fff;border-radius:14px;border:1px solid #E5E7EB">
+            <div style="font-size:36px;margin-bottom:12px">⏳</div>
+            <div style="color:#6B7280;font-size:14px">Loading categories...</div>
+        </div>
+    }
+    else
+    {
+        var filtered = categories.Where(c => c.Type.ToLower() == activeTab).ToList();
+
+        if (!filtered.Any())
+        {
+            <div style="text-align:center;padding:40px;background:#fff;border-radius:14px;border:1px solid #E5E7EB">
+                <div style="font-size:40px;margin-bottom:12px">📂</div>
+                <div style="font-size:16px;font-weight:600;margin-bottom:6px">No categories yet</div>
+                <div style="font-size:13px;color:#6B7280">Add your first category above</div>
+            </div>
+        }
+        else
+        {
+            <div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+
+                <!-- List header -->
+                <div style="display:grid;grid-template-columns:60px 1fr auto;gap:12px;padding:12px 20px;background:#F9FAFB;border-bottom:1px solid #F3F4F6">
+                    <div style="font-size:12px;font-weight:600;color:#9CA3AF;text-transform:uppercase;letter-spacing:.04em">Icon</div>
+                    <div style="font-size:12px;font-weight:600;color:#9CA3AF;text-transform:uppercase;letter-spacing:.04em">Name</div>
+                    <div style="font-size:12px;font-weight:600;color:#9CA3AF;text-transform:uppercase;letter-spacing:.04em">Actions</div>
+                </div>
+
+                @foreach (var cat in filtered)
+                {
+                    var isEditing = editingId == cat.CategoryId;
+
+                    <div style="display:grid;grid-template-columns:60px 1fr auto;gap:12px;padding:14px 20px;border-bottom:1px solid #F9FAFB;align-items:center;transition:background .1s"
+                         @onmouseenter="() => hoveredId = cat.CategoryId"
+                         @onmouseleave="() => hoveredId = string.Empty">
+
+                        <!-- Icon -->
+                        <div style="font-size:24px;text-align:center">
+                            @if (isEditing)
+                            {
+                                <div style="position:relative">
+                                    <button @onclick="ToggleEditIconPicker"
+                                            style="width:40px;height:40px;border:1.5px solid #E5E7EB;border-radius:8px;background:#fff;font-size:20px;cursor:pointer">
+                                        @editIcon
+                                    </button>
+                                    @if (showEditIconPicker)
+                                    {
+                                        <div style="position:absolute;top:46px;left:0;background:#fff;border:1px solid #E5E7EB;border-radius:12px;padding:12px;z-index:100;box-shadow:0 8px 24px rgba(0,0,0,.12);display:grid;grid-template-columns:repeat(7,36px);gap:4px;width:280px">
+                                            @foreach (var emoji in AllIcons)
+                                            {
+                                                <button @onclick="() => SelectEditIcon(emoji)"
+                                                        style="width:36px;height:36px;border:none;background:@(editIcon == emoji ? "#EEF2FF" : "transparent");border-radius:6px;font-size:18px;cursor:pointer">
+                                                    @emoji
+                                                </button>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                @cat.Icon
+                            }
+                        </div>
+
+                        <!-- Name -->
+                        <div>
+                            @if (isEditing)
+                            {
+                                <input class="form-control"
+                                       type="text"
+                                       @bind="editName"
+                                       @onkeydown="OnEnterSave"
+                                       style="max-width:280px" />
+                            }
+                            else
+                            {
+                                <div style="font-size:15px;font-weight:500;color:#111827">@cat.Name</div>
+                                <div style="font-size:12px;color:#9CA3AF;margin-top:2px">
+                                    @(activeTab == "expense" ? "Expense" : "Income") category
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Actions -->
+                        <div style="display:flex;gap:6px">
+                            @if (isEditing)
+                            {
+                                <button class="btn btn-success btn-sm"
+                                        @onclick="() => SaveEdit(cat)"
+                                        disabled="@saving">
+                                    @(saving ? "..." : "✓ Save")
+                                </button>
+                                <button class="btn btn-outline btn-sm"
+                                        @onclick="CancelEdit">
+                                    Cancel
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn-icon" title="Rename"
+                                        style="opacity:@(hoveredId == cat.CategoryId ? "1" : "0.3");transition:opacity .15s"
+                                        @onclick="() => StartEdit(cat)">
+                                    ✏️
+                                </button>
+                                <button class="btn-icon" title="Delete"
+                                        style="background:#FEE2E2;opacity:@(hoveredId == cat.CategoryId ? "1" : "0.3");transition:opacity .15s"
+                                        @onclick="() => ConfirmDelete(cat)">
+                                    🗑️
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div style="font-size:12px;color:#9CA3AF;margin-top:10px;text-align:right">
+                @filtered.Count categor@(filtered.Count == 1 ? "y" : "ies") total
+            </div>
+        }
+    }
+</div>
+
+<!-- Delete confirmation modal -->
+@if (categoryToDelete != null)
+{
+    <div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px">
+        <div style="background:#fff;border-radius:16px;padding:28px;max-width:400px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+            <div style="font-size:36px;text-align:center;margin-bottom:12px">⚠️</div>
+            <div style="font-size:17px;font-weight:600;text-align:center;margin-bottom:8px">Delete Category?</div>
+            <div style="font-size:14px;color:#6B7280;text-align:center;margin-bottom:6px">
+                Are you sure you want to delete
+            </div>
+            <div style="text-align:center;margin-bottom:20px">
+                <span style="font-size:28px">@categoryToDelete.Icon</span>
+                <span style="font-size:16px;font-weight:600;margin-left:8px">@categoryToDelete.Name</span>
+            </div>
+            <div style="background:#FFF7ED;border-radius:10px;padding:12px;margin-bottom:20px;font-size:13px;color:#92400E;text-align:center">
+                ⚠️ Existing transactions using this category will show as "Other"
+            </div>
+            <div style="display:flex;gap:10px">
+                <button class="btn btn-danger" style="flex:1;justify-content:center"
+                        @onclick="DeleteCategory" disabled="@saving">
+                    @(saving ? "Deleting..." : "Yes, Delete")
+                </button>
+                <button class="btn btn-outline" style="flex:1;justify-content:center"
+                        @onclick="() => categoryToDelete = null">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    List<Category> categories = new();
+    bool loading = true;
+    bool saving = false;
+    string activeTab = "expense";
+    string hoveredId = "";
+    string formError = "";
+    string successMsg = "";
+
+    // Add form
+    string newName = "";
+    string newIcon = "📂";
+    bool showIconPicker = false;
+
+    // Edit
+    string editingId = "";
+    string editName = "";
+    string editIcon = "";
+    bool showEditIconPicker = false;
+
+    // Delete
+    Category? categoryToDelete = null;
+
+    // All available icons grouped by theme
+    List<string> AllIcons = new()
+    {
+        // Food & drink
+        "🍔","🍕","🍜","🍱","🥗","🍳","☕","🧃","🍺","🥤",
+        // Transport
+        "🚌","🚗","✈️","🚇","🚲","⛽","🚕","🛵","🚢","🚁",
+        // Home & bills
+        "🏠","💡","💧","🔥","📱","💻","🖥️","📺","🛒","🧹",
+        // Health
+        "🏥","💊","🩺","🏋️","🧘","👨‍⚕️","🦷","👁️","🩻","💉",
+        // Shopping
+        "🛍️","👗","👟","💄","🎒","⌚","💍","🕶️","🧴","🪴",
+        // Entertainment
+        "🎬","🎮","🎵","📚","🎭","🎨","⚽","🎯","🎲","🏖️",
+        // Finance & work
+        "💰","💵","💳","🏦","📈","📉","💼","🖨️","📊","🏧",
+        // Education
+        "🎓","📝","✏️","📐","🔬","🧪","📖","🏫","🖊️","📓",
+        // People & family
+        "👶","🧒","👦","👧","🧑","👨","👩","👴","👵","👨‍👩‍👧",
+        // Misc
+        "🎁","🎉","🌱","🐾","⭐","🔧","🧰","🪣","📦","📂"
+    };
+
+    protected override async Task OnInitializedAsync()
+        => await LoadCategories();
+
+    async Task LoadCategories()
+    {
+        loading = true;
+        categories = await Sheets.GetCategoriesAsync();
+        loading = false;
+    }
+
+    // ── Add ──────────────────────────────────────────────────────────
+
+    async Task AddCategory()
+    {
+        formError = "";
+        successMsg = "";
+
+        if (string.IsNullOrWhiteSpace(newName))
+        {
+            formError = "Please enter a category name.";
+            return;
+        }
+
+        var type = activeTab == "expense" ? "Expense" : "Income";
+
+        var exists = categories.Any(c =>
+            c.Name.ToLower() == newName.Trim().ToLower() && c.Type == type);
+
+        if (exists)
+        {
+            formError = $"A {type} category named \"{newName.Trim()}\" already exists.";
+            return;
+        }
+
+        saving = true;
+        await Sheets.AddCategoryAsync(new Category
+        {
+            Name = newName.Trim(),
+            Type = type,
+            Icon = newIcon
+        });
+
+        successMsg = $"✅ \"{newName.Trim()}\" added successfully.";
+        newName = "";
+        newIcon = "📂";
+        saving = false;
+
+        await LoadCategories();
+
+        // Auto-clear success message after 3 seconds
+        _ = Task.Delay(3000).ContinueWith(_ =>
+        {
+            successMsg = "";
+            InvokeAsync(StateHasChanged);
+        });
+    }
+
+    async Task OnEnterAdd(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await AddCategory();
+    }
+
+    // ── Edit ─────────────────────────────────────────────────────────
+
+    void StartEdit(Category cat)
+    {
+        editingId = cat.CategoryId;
+        editName = cat.Name;
+        editIcon = cat.Icon;
+        showEditIconPicker = false;
+        formError = "";
+        successMsg = "";
+    }
+
+    void CancelEdit()
+    {
+        editingId = "";
+        showEditIconPicker = false;
+    }
+
+    async Task SaveEdit(Category cat)
+    {
+        if (string.IsNullOrWhiteSpace(editName))
+        {
+            formError = "Category name cannot be empty.";
+            return;
+        }
+
+        var duplicate = categories.Any(c =>
+            c.Name.ToLower() == editName.Trim().ToLower() &&
+            c.Type == cat.Type &&
+            c.CategoryId != cat.CategoryId);
+
+        if (duplicate)
+        {
+            formError = $"A category named \"{editName.Trim()}\" already exists.";
+            return;
+        }
+
+        saving = true;
+        await Sheets.UpdateCategoryAsync(cat.CategoryId, editName.Trim(), cat.Type, editIcon);
+        editingId = "";
+        saving = false;
+
+        successMsg = $"✅ Category updated successfully.";
+        await LoadCategories();
+
+        _ = Task.Delay(3000).ContinueWith(_ =>
+        {
+            successMsg = "";
+            InvokeAsync(StateHasChanged);
+        });
+    }
+
+    async Task OnEnterSave(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            var cat = categories.FirstOrDefault(c => c.CategoryId == editingId);
+            if (cat != null) await SaveEdit(cat);
+        }
+    }
+
+    // ── Delete ───────────────────────────────────────────────────────
+
+    void ConfirmDelete(Category cat)
+    {
+        categoryToDelete = cat;
+        formError = "";
+        successMsg = "";
+    }
+
+    async Task DeleteCategory()
+    {
+        if (categoryToDelete == null) return;
+        saving = true;
+        await Sheets.DeleteCategoryAsync(categoryToDelete.CategoryId);
+        successMsg = $"✅ \"{categoryToDelete.Name}\" deleted.";
+        categoryToDelete = null;
+        saving = false;
+        await LoadCategories();
+
+        _ = Task.Delay(3000).ContinueWith(_ =>
+        {
+            successMsg = "";
+            InvokeAsync(StateHasChanged);
+        });
+    }
+
+    // ── Icon pickers ─────────────────────────────────────────────────
+
+    void ToggleIconPicker()
+    {
+        showIconPicker = !showIconPicker;
+        showEditIconPicker = false;
+    }
+
+    void SelectIcon(string emoji)
+    {
+        newIcon = emoji;
+        showIconPicker = false;
+    }
+
+    void ToggleEditIconPicker()
+    {
+        showEditIconPicker = !showEditIconPicker;
+        showIconPicker = false;
+    }
+
+    void SelectEditIcon(string emoji)
+    {
+        editIcon = emoji;
+        showEditIconPicker = false;
+    }
+}

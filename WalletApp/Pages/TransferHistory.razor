@@ -6,31 +6,25 @@
 
 <div style="max-width:900px;margin:0 auto">
 
-    <!-- Header -->
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
         <div>
             <div style="font-size:20px;font-weight:700">Transfer History</div>
             <div style="font-size:13px;color:#6B7280;margin-top:2px">All money movements between your accounts</div>
         </div>
-        <button class="btn btn-primary" @onclick='() => Nav.NavigateTo("/transfer")'>
-            🔄 New Transfer
-        </button>
+        <button class="btn btn-primary" @onclick='() => Nav.NavigateTo("/transfer")'>🔄 New Transfer</button>
     </div>
 
     <!-- Filter Bar -->
     <div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;padding:16px 20px;margin-bottom:20px;box-shadow:0 1px 4px rgba(0,0,0,.05)">
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end">
-
             <div>
                 <label style="font-size:12px;font-weight:500;color:#6B7280;display:block;margin-bottom:4px">From Date</label>
                 <input class="form-control" type="date" @bind="filterFrom" />
             </div>
-
             <div>
                 <label style="font-size:12px;font-weight:500;color:#6B7280;display:block;margin-bottom:4px">To Date</label>
                 <input class="form-control" type="date" @bind="filterTo" />
             </div>
-
             <div>
                 <label style="font-size:12px;font-weight:500;color:#6B7280;display:block;margin-bottom:4px">Account</label>
                 <select class="form-control" @bind="filterAccountId">
@@ -41,36 +35,28 @@
                     }
                 </select>
             </div>
-
             <div style="display:flex;gap:8px">
                 <button class="btn btn-primary" @onclick="ApplyFilter">Apply</button>
-                <button class="btn btn-outline"  @onclick="ResetFilter">Reset</button>
+                <button class="btn btn-outline" @onclick="ResetFilter">Reset</button>
             </div>
         </div>
-
-        <!-- Search -->
         <div style="margin-top:12px">
-            <input class="form-control" type="text"
-                   placeholder="🔍  Search by note or account name..."
-                   @bind="SearchText" @bind:event="oninput" />
+            <input class="form-control" type="text" placeholder="🔍  Search by note or category..."
+                   @bind="searchText" @bind:event="oninput" />
         </div>
     </div>
 
-    <!-- Summary Strip -->
+    <!-- Summary -->
     @if (!loading && filtered.Any())
     {
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
             <div style="background:#EEF2FF;border-radius:12px;padding:14px 18px">
                 <div style="font-size:12px;font-weight:500;color:#4338CA">Total Transferred</div>
-                <div style="font-size:20px;font-weight:700;color:#4F46E5;margin-top:2px">
-                    ৳@filtered.Sum(t => t.Amount).ToString("N2")
-                </div>
+                <div style="font-size:20px;font-weight:700;color:#4F46E5;margin-top:2px">৳@filtered.Sum(t => t.Amount).ToString("N2")</div>
             </div>
             <div style="background:#F0FDF4;border-radius:12px;padding:14px 18px">
                 <div style="font-size:12px;font-weight:500;color:#15803D">No. of Transfers</div>
-                <div style="font-size:20px;font-weight:700;color:#16A34A;margin-top:2px">
-                    @filtered.Count
-                </div>
+                <div style="font-size:20px;font-weight:700;color:#16A34A;margin-top:2px">@filtered.Count</div>
             </div>
             <div style="background:#FFF7ED;border-radius:12px;padding:14px 18px">
                 <div style="font-size:12px;font-weight:500;color:#C2410C">Average Amount</div>
@@ -81,7 +67,6 @@
         </div>
     }
 
-    <!-- Loading -->
     @if (loading)
     {
         <div style="text-align:center;padding:60px;background:#fff;border-radius:14px;border:1px solid #E5E7EB">
@@ -94,99 +79,57 @@
         <div style="text-align:center;padding:60px;background:#fff;border-radius:14px;border:1px solid #E5E7EB">
             <div style="font-size:48px;margin-bottom:14px">🔄</div>
             <div style="font-size:17px;font-weight:600;margin-bottom:6px">No transfers found</div>
-            <div style="font-size:13px;color:#6B7280;margin-bottom:20px">
-                Try changing the filters or make your first transfer
-            </div>
-            <button class="btn btn-primary" @onclick='() => Nav.NavigateTo("/transfer")'>
-                🔄 New Transfer
-            </button>
+            <div style="font-size:13px;color:#6B7280;margin-bottom:20px">Try changing the filters or make your first transfer</div>
+            <button class="btn btn-primary" @onclick='() => Nav.NavigateTo("/transfer")'>🔄 New Transfer</button>
         </div>
     }
     else
     {
-        <!-- Grouped by date -->
         @foreach (var group in GroupedTransfers)
         {
             <div style="margin-bottom:20px">
-
-                <!-- Date header -->
                 <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
-                    <div style="font-size:13px;font-weight:600;color:#374151">
-                        @FormatGroupDate(group.Key)
-                    </div>
+                    <div style="font-size:13px;font-weight:600;color:#374151">@FormatGroupDate(group.Key)</div>
                     <div style="flex:1;height:1px;background:#E5E7EB"></div>
                     <div style="font-size:12px;color:#6B7280">
-                        @group.Count() transfer@(group.Count() == 1 ? "" : "s") •
-                        ৳@group.Sum(t => t.Amount).ToString("N2")
+                        @group.Count() transfer@(group.Count() == 1 ? "" : "s") • ৳@group.Sum(t => t.Amount).ToString("N2")
                     </div>
                 </div>
-
-                <!-- Transfer rows -->
                 <div style="display:flex;flex-direction:column;gap:8px">
                     @foreach (var transfer in group)
                     {
                         var fromAcc = accounts.FirstOrDefault(a => a.AccountId == transfer.FromAccountId);
                         var toAcc   = accounts.FirstOrDefault(a => a.AccountId == transfer.ToAccountId);
-
                         <div style="background:#fff;border-radius:12px;border:1px solid #F3F4F6;padding:16px 18px;display:flex;align-items:center;gap:14px"
                              @onmouseenter="() => hoveredId = transfer.TransferId"
                              @onmouseleave="() => hoveredId = string.Empty">
-
-                            <!-- Icon -->
-                            <div style="width:46px;height:46px;border-radius:12px;background:#EEF2FF;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">
-                                🔄
-                            </div>
-
-                            <!-- From → To -->
+                            <div style="width:46px;height:46px;border-radius:12px;background:#EEF2FF;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">🔄</div>
                             <div style="flex:1;min-width:0">
                                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                                    <!-- From account pill -->
-                                    <div style="background:#FEE2E2;color:#DC2626;padding:4px 10px;border-radius:99px;font-size:13px;font-weight:600">
-                                        @(fromAcc?.Name ?? "Unknown")
-                                    </div>
+                                    <div style="background:#FEE2E2;color:#DC2626;padding:4px 10px;border-radius:99px;font-size:13px;font-weight:600">@(fromAcc?.Name ?? "Unknown")</div>
                                     <div style="color:#9CA3AF;font-size:16px">→</div>
-                                    <!-- To account pill -->
-                                    <div style="background:#DCFCE7;color:#16A34A;padding:4px 10px;border-radius:99px;font-size:13px;font-weight:600">
-                                        @(toAcc?.Name ?? "Unknown")
-                                    </div>
+                                    <div style="background:#DCFCE7;color:#16A34A;padding:4px 10px;border-radius:99px;font-size:13px;font-weight:600">@(toAcc?.Name ?? "Unknown")</div>
                                 </div>
                                 @if (!string.IsNullOrEmpty(transfer.Note))
                                 {
-                                    <div style="font-size:12px;color:#9CA3AF;margin-top:6px">
-                                        📝 @transfer.Note
-                                    </div>
+                                    <div style="font-size:12px;color:#9CA3AF;margin-top:6px">📝 @transfer.Note</div>
                                 }
-                                <div style="font-size:11px;color:#D1D5DB;margin-top:4px">
-                                    @transfer.CreatedAt.ToString("dd MMM yyyy, hh:mm tt")
-                                </div>
+                                <div style="font-size:11px;color:#D1D5DB;margin-top:4px">@transfer.CreatedAt.ToString("dd MMM yyyy, hh:mm tt")</div>
                             </div>
-
-                            <!-- Amount -->
                             <div style="text-align:right;flex-shrink:0">
-                                <div style="font-size:18px;font-weight:700;color:#4F46E5">
-                                    ৳@transfer.Amount.ToString("N2")
-                                </div>
-                                <span class="badge badge-transfer" style="margin-top:4px;display:inline-block">
-                                    Transfer
-                                </span>
+                                <div style="font-size:18px;font-weight:700;color:#4F46E5">৳@transfer.Amount.ToString("N2")</div>
+                                <span class="badge badge-transfer" style="margin-top:4px;display:inline-block">Transfer</span>
                             </div>
-
-                            <!-- Delete button on hover -->
-                            @if (hoveredId == transfer.TransferId)
-                            {
-                                <button class="btn-icon" style="background:#FEE2E2;flex-shrink:0"
-                                        title="Delete transfer"
-                                        @onclick="() => ConfirmDelete(transfer)">
-                                    🗑️
-                                </button>
-                            }
+                            <!-- Action buttons -->
+                            <div style="display:flex;gap:6px;opacity:@(hoveredId==transfer.TransferId?"1":"0");transition:opacity .15s">
+                                <button class="btn-icon" title="Edit" @onclick="() => OpenEditTransfer(transfer)">✏️</button>
+                                <button class="btn-icon" style="background:#FEE2E2" title="Delete" @onclick="() => ConfirmDelete(transfer)">🗑️</button>
+                            </div>
                         </div>
                     }
                 </div>
             </div>
         }
-
-        <!-- Load more -->
         @if (allTransfers.Count > pageSize * currentPage)
         {
             <div style="text-align:center;margin-top:8px">
@@ -198,23 +141,91 @@
     }
 </div>
 
-<!-- Delete confirmation modal -->
+<!-- ── EDIT TRANSFER MODAL ── -->
+@if (editingTransfer != null)
+{
+    <div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px"
+         @onclick="CloseEditTransfer">
+        <div style="background:#fff;border-radius:16px;padding:28px;max-width:480px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.2)"
+             @onclick:stopPropagation="true">
+
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+                <div style="font-size:17px;font-weight:600">✏️ Edit Transfer</div>
+                <button class="btn-icon" @onclick="CloseEditTransfer">✕</button>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Amount (৳)</label>
+                <input class="form-control" type="number" step="0.01"
+                       @bind="editTransferAmount"
+                       style="font-size:22px;font-weight:700;color:#4F46E5" />
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">From Account</label>
+                    <select class="form-control" @bind="editTransferFromId">
+                        @foreach (var a in accounts)
+                        {
+                            <option value="@a.AccountId">@a.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">To Account</label>
+                    <select class="form-control" @bind="editTransferToId">
+                        @foreach (var a in accounts.Where(a => a.AccountId != editTransferFromId))
+                        {
+                            <option value="@a.AccountId">@a.Name</option>
+                        }
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Date</label>
+                    <input class="form-control" type="date" @bind="editTransferDate" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Note</label>
+                    <input class="form-control" type="text" placeholder="Optional note..." @bind="editTransferNote" />
+                </div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(editError))
+            {
+                <div style="background:#FEE2E2;color:#DC2626;padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:13px">
+                    @editError
+                </div>
+            }
+
+            <div style="display:flex;gap:10px;margin-top:4px">
+                <button class="btn btn-primary" style="flex:1;justify-content:center"
+                        @onclick="SaveEditTransfer" disabled="@saving">
+                    @(saving ? "Saving..." : "Save Changes")
+                </button>
+                <button class="btn btn-outline" style="flex:1;justify-content:center"
+                        @onclick="CloseEditTransfer">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ── DELETE CONFIRMATION MODAL ── -->
 @if (transferToDelete != null)
 {
     <div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px">
         <div style="background:#fff;border-radius:16px;padding:28px;max-width:400px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.2)">
             <div style="font-size:36px;text-align:center;margin-bottom:12px">⚠️</div>
             <div style="font-size:17px;font-weight:600;text-align:center;margin-bottom:8px">Delete Transfer?</div>
-            <div style="font-size:14px;color:#6B7280;text-align:center;margin-bottom:6px">
-                This will reverse the balances on both accounts.
-            </div>
+            <div style="font-size:14px;color:#6B7280;text-align:center;margin-bottom:6px">This will reverse the balances on both accounts.</div>
             <div style="background:#FFF7ED;border-radius:10px;padding:12px;margin-bottom:20px;font-size:13px;color:#92400E;text-align:center">
-                @{
-                    var fa = accounts.FirstOrDefault(a => a.AccountId == transferToDelete.FromAccountId);
-                    var ta = accounts.FirstOrDefault(a => a.AccountId == transferToDelete.ToAccountId);
-                }
-                ৳@transferToDelete.Amount.ToString("N2") from <strong>@(fa?.Name ?? "?")</strong>
-                → <strong>@(ta?.Name ?? "?")</strong>
+                @{ var fa = accounts.FirstOrDefault(a => a.AccountId == transferToDelete.FromAccountId);
+                   var ta = accounts.FirstOrDefault(a => a.AccountId == transferToDelete.ToAccountId); }
+                ৳@transferToDelete.Amount.ToString("N2") from <strong>@(fa?.Name ?? "?")</strong> → <strong>@(ta?.Name ?? "?")</strong>
             </div>
             <div style="display:flex;gap:10px">
                 <button class="btn btn-danger" style="flex:1;justify-content:center"
@@ -231,12 +242,14 @@
 }
 
 @code {
-    List<WalletApp.Models.Transfer> allTransfers      = new();
+    List<WalletApp.Models.Transfer> allTransfers = new();
     List<WalletApp.Models.Transfer> filtered = new();
-    List<Account>  accounts          = new();
-    bool           loading           = true;
-    bool           deleting          = false;
-    string         hoveredId         = "";
+    List<Account>  accounts         = new();
+    bool           loading          = true;
+    bool           saving           = false;
+    bool           deleting         = false;
+    string         hoveredId        = "";
+    string         editError        = "";
     WalletApp.Models.Transfer? transferToDelete = null;
 
     // Filters
@@ -248,21 +261,15 @@
     // Pagination
     int pageSize    = 20;
     int currentPage = 1;
-    private string _searchText = string.Empty;
 
-    public string SearchText
-    {
-        get => _searchText;
-        set
-        {
-            if (_searchText != value)
-            {
-                _searchText = value;
-                // Automatically run your filter whenever the text changes!
-                ApplyLocalFilter();
-            }
-        }
-    }
+    // Edit
+    WalletApp.Models.Transfer? editingTransfer = null;
+    decimal   editTransferAmount   = 0;
+    string    editTransferFromId   = "";
+    string    editTransferToId     = "";
+    DateTime  editTransferDate     = DateTime.Today;
+    string    editTransferNote     = "";
+
     protected override async Task OnInitializedAsync()
     {
         accounts = await Sheets.GetAccountsAsync();
@@ -277,47 +284,35 @@
         loading = false;
     }
 
-    async Task ApplyFilter()
-    {
-        currentPage = 1;
-        await LoadTransfers();
-    }
+    async Task ApplyFilter() { currentPage = 1; await LoadTransfers(); }
 
     void ResetFilter()
     {
-        filterFrom      = DateTime.Now.AddMonths(-1);
-        filterTo        = DateTime.Now;
-        filterAccountId = "";
-        searchText      = "";
-        currentPage     = 1;
+        filterFrom = DateTime.Now.AddMonths(-1); filterTo = DateTime.Now;
+        filterAccountId = ""; searchText = ""; currentPage = 1;
         ApplyLocalFilter();
     }
 
     void ApplyLocalFilter()
     {
         var result = allTransfers.AsEnumerable();
-
         if (!string.IsNullOrEmpty(searchText))
         {
             var q = searchText.ToLower();
             result = result.Where(t =>
                 (t.Note?.ToLower().Contains(q) ?? false) ||
-                (accounts.FirstOrDefault(a => a.AccountId == t.FromAccountId)
-                    ?.Name.ToLower().Contains(q) ?? false) ||
-                (accounts.FirstOrDefault(a => a.AccountId == t.ToAccountId)
-                    ?.Name.ToLower().Contains(q) ?? false));
+                (accounts.FirstOrDefault(a => a.AccountId == t.FromAccountId)?.Name.ToLower().Contains(q) ?? false) ||
+                (accounts.FirstOrDefault(a => a.AccountId == t.ToAccountId)?.Name.ToLower().Contains(q) ?? false));
         }
-
         filtered = result.ToList();
     }
 
     void LoadMore() => currentPage++;
 
     IEnumerable<IGrouping<string, WalletApp.Models.Transfer>> GroupedTransfers =>
-        filtered
-            .Take(pageSize * currentPage)
-            .GroupBy(t => t.Date.ToString("yyyy-MM-dd"))
-            .OrderByDescending(g => g.Key);
+        filtered.Take(pageSize * currentPage)
+                .GroupBy(t => t.Date.ToString("yyyy-MM-dd"))
+                .OrderByDescending(g => g.Key);
 
     string FormatGroupDate(string dateKey)
     {
@@ -327,15 +322,58 @@
         return date.ToString("dddd, dd MMMM yyyy");
     }
 
-    void ConfirmDelete(WalletApp.Models.Transfer transfer) => transferToDelete = transfer;
+    // ── Edit ─────────────────────────────────────────────────────────
+
+    void OpenEditTransfer(WalletApp.Models.Transfer t)
+    {
+        editingTransfer    = t;
+        editTransferAmount = t.Amount;
+        editTransferFromId = t.FromAccountId;
+        editTransferToId   = t.ToAccountId;
+        editTransferDate   = t.Date;
+        editTransferNote   = t.Note ?? "";
+        editError          = "";
+    }
+
+    void CloseEditTransfer() { editingTransfer = null; editError = ""; }
+
+    async Task SaveEditTransfer()
+    {
+        if (editTransferAmount <= 0)              { editError = "Amount must be greater than zero."; return; }
+        if (string.IsNullOrEmpty(editTransferFromId)) { editError = "Select source account."; return; }
+        if (string.IsNullOrEmpty(editTransferToId))   { editError = "Select destination account."; return; }
+        if (editTransferFromId == editTransferToId)   { editError = "Source and destination must be different."; return; }
+
+        saving = true; editError = "";
+
+        var updated = new WalletApp.Models.Transfer
+        {
+            TransferId    = editingTransfer!.TransferId,
+            Amount        = editTransferAmount,
+            FromAccountId = editTransferFromId,
+            ToAccountId   = editTransferToId,
+            Date          = editTransferDate,
+            Note          = editTransferNote,
+            CreatedAt     = editingTransfer.CreatedAt
+        };
+
+        await Sheets.UpdateTransferAsync(editingTransfer, updated);
+        saving          = false;
+        editingTransfer = null;
+        await LoadTransfers();
+    }
+
+    // ── Delete ───────────────────────────────────────────────────────
+
+    void ConfirmDelete(WalletApp.Models.Transfer t) => transferToDelete = t;
 
     async Task DeleteTransfer()
     {
         if (transferToDelete == null) return;
         deleting = true;
         await Sheets.DeleteTransferAsync(transferToDelete);
-        deleting          = false;
-        transferToDelete  = null;
+        deleting         = false;
+        transferToDelete = null;
         await LoadTransfers();
     }
 }

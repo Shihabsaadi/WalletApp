@@ -301,6 +301,94 @@ public class GoogleSheetsService
             }
         }
     }
+
+    public async Task UpdateCategoryAsync(string categoryId, string name, string type, string icon)
+    {
+        var rows = await ReadRange("Categories!A2:D");
+        for (int i = 0; i < rows.Count; i++)
+        {
+            if (rows[i].Count > 0 && rows[i][0]?.ToString() == categoryId)
+            {
+                var updatedRow = new List<object> { categoryId, name, type, icon };
+                await UpdateRow($"Categories!A{i + 2}:D{i + 2}", updatedRow);
+                return;
+            }
+        }
+    }
+
+    public async Task DeleteCategoryAsync(string categoryId)
+    {
+        var rows = await ReadRange("Categories!A2:D");
+        for (int i = 0; i < rows.Count; i++)
+        {
+            if (rows[i].Count > 0 && rows[i][0]?.ToString() == categoryId)
+            {
+                var emptyRow = new List<object> { "", "", "", "" };
+                await UpdateRow($"Categories!A{i + 2}:D{i + 2}", emptyRow);
+                return;
+            }
+        }
+    }
+
+    public async Task UpdateTransactionAsync(Transaction old, Transaction updated)
+    {
+        var rows = await ReadRange("Transactions!A2:H");
+        for (int i = 0; i < rows.Count; i++)
+        {
+            if (rows[i].Count > 0 && rows[i][0]?.ToString() == old.TransactionId)
+            {
+                // Reverse old balance effect
+                var accounts = await GetAccountsAsync();
+                var oldAcc = accounts.FirstOrDefault(a => a.AccountId == old.AccountId);
+                if (oldAcc != null)
+                {
+                    var reversal = old.Type == "Income" ? -old.Amount : old.Amount;
+                    await UpdateAccountBalanceAsync(oldAcc.AccountId, oldAcc.Balance + reversal);
+                }
+
+                // Write updated row
+                await UpdateRow($"Transactions!A{i + 2}:H{i + 2}", updated.ToRow());
+
+                // Apply new balance effect
+                accounts = await GetAccountsAsync(); // reload after reversal
+                var newAcc = accounts.FirstOrDefault(a => a.AccountId == updated.AccountId);
+                if (newAcc != null)
+                {
+                    var delta = updated.Type == "Income" ? updated.Amount : -updated.Amount;
+                    await UpdateAccountBalanceAsync(newAcc.AccountId, newAcc.Balance + delta);
+                }
+                return;
+            }
+        }
+    }
+
+    public async Task UpdateTransferAsync(Transfer old, Transfer updated)
+    {
+        var rows = await ReadRange("Transfers!A2:G");
+        for (int i = 0; i < rows.Count; i++)
+        {
+            if (rows[i].Count > 0 && rows[i][0]?.ToString() == old.TransferId)
+            {
+                // Reverse old transfer balances
+                var accounts = await GetAccountsAsync();
+                var oldFrom = accounts.FirstOrDefault(a => a.AccountId == old.FromAccountId);
+                var oldTo = accounts.FirstOrDefault(a => a.AccountId == old.ToAccountId);
+                if (oldFrom != null) await UpdateAccountBalanceAsync(oldFrom.AccountId, oldFrom.Balance + old.Amount);
+                if (oldTo != null) await UpdateAccountBalanceAsync(oldTo.AccountId, oldTo.Balance - old.Amount);
+
+                // Write updated row
+                await UpdateRow($"Transfers!A{i + 2}:G{i + 2}", updated.ToRow());
+
+                // Apply new transfer balances
+                accounts = await GetAccountsAsync();
+                var newFrom = accounts.FirstOrDefault(a => a.AccountId == updated.FromAccountId);
+                var newTo = accounts.FirstOrDefault(a => a.AccountId == updated.ToAccountId);
+                if (newFrom != null) await UpdateAccountBalanceAsync(newFrom.AccountId, newFrom.Balance - updated.Amount);
+                if (newTo != null) await UpdateAccountBalanceAsync(newTo.AccountId, newTo.Balance + updated.Amount);
+                return;
+            }
+        }
+    }
     // ── JSON model for Sheets API response ───────────────────────────
 
     private class SheetValueRange
