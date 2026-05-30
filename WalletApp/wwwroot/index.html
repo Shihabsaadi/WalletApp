@@ -52,12 +52,24 @@
 
         // File download helper used by export feature
         function downloadFile(filename, mimeType, base64) {
-            const link = document.createElement('a');
-            link.href = 'data:' + mimeType + ';base64,' + base64;
-            link.download = filename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            const a = document.createElement('a');
+            a.href = 'data:' + mimeType + ';base64,' + base64;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        // Opens HTML in a new window and triggers the browser print dialog
+        // User can then Save as PDF from the print dialog
+        function printHtmlAsPdf(html) {
+            const win = window.open('', '_blank', 'width=900,height=700');
+            win.document.write(html);
+            win.document.close();
+            win.focus();
+            setTimeout(() => {
+                win.print();
+            }, 800); // small delay so styles load before print dialog opens
         }
     </script>
 

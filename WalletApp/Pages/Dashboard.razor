@@ -162,8 +162,8 @@ else if (stats != null)
     async Task ExportExcel()
     {
         var txns = await Sheets.GetTransactionsAsync(filterFrom, filterTo);
-        var bytes = Exporter.ExportToExcel(txns, accounts, categories);
-        // Trigger download via JS
+        var transfers = await Sheets.GetTransfersAsync(filterFrom, filterTo, null);
+        var bytes = Exporter.ExportToExcel(txns, accounts, categories, transfers);
         await JS.InvokeVoidAsync("downloadFile", "wallet-export.xlsx",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             Convert.ToBase64String(bytes));
@@ -172,9 +172,9 @@ else if (stats != null)
     async Task ExportPdf()
     {
         var txns = await Sheets.GetTransactionsAsync(filterFrom, filterTo);
-        var bytes = Exporter.ExportToPdf(txns, accounts, categories);
-        await JS.InvokeVoidAsync("downloadFile", "wallet-report.pdf", "application/pdf",
-            Convert.ToBase64String(bytes));
+        var transfers = await Sheets.GetTransfersAsync(filterFrom, filterTo, null);
+        var html = Exporter.GeneratePdfHtml(txns, accounts, categories, transfers);
+        await JS.InvokeVoidAsync("printHtmlAsPdf", html);
     }
 
     [Inject] IJSRuntime JS { get; set; } = default!;
